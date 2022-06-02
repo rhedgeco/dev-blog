@@ -1,0 +1,31 @@
+# Permalinks
+permalink: pretty
+
+# Setup
+title: Ryan Hedgecock
+tagline: Dev Blog
+greeting: Hi I'm Ryan 👋
+description: >-
+  Welcome to my blog, have a look around!<br><br>
+  I do a lot of work with the <a href="https://unity.com">Unity Engine</a>, and I especially love procedural generation.
+  My content may be a little all over the place, but that's part of the fun right? 😅
+  Thanks for stopping by!
+url: https://blog.hedgecock.dev
+paginate: 1
+baseurl: ""
+
+# Assets
+sass:
+  sass_dir: _sass
+  style: :compressed
+
+# About/contact
+author:
+  name: Ryan Hedgecock
+  url: https://hedgecock.dev
+  email: rhedgeco@gmail.com
+
+# Custom vars
+version: 0.1.0
+github:
+  repo: https://github.com/rhedgeco/dev-blog
