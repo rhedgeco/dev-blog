@@ -1,0 +1,29 @@
+.recent-blogs {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, 12rem);
+  gap: 1.5rem;
+}
+
+.blog-preview {
+  img {
+    margin: 0;
+    border: 2px solid var(--background-alt-color);
+  }
+  h3 {
+    margin: 0.25rem;
+    font-size: 0.85rem;
+  }
+
+  time {
+    margin: 0.25rem;
+    font-size: 0.75rem;
+  }
+}
+
+h1, h2, h3, h4, h5, h6 {
+  .header-link {
+    font-size: 60%;
+    margin-left: 0.5rem;
+  }
+}

@@ -1,4 +1,5 @@
-<div id="github-thread" class="article-comments"></div>
+<hr>
+<div id="github-thread"></div>
 <script>
 (() => {
     let utterances = document.createElement('script');
@@ -12,7 +13,7 @@
     let utterancesTheme = localStorage.getItem('data-theme') === 'dark' ? 'github-dark' : 'github-light';
     utterances.setAttribute('theme', utterancesTheme);
 
-    document.getElementById('github-thread').after(utterances);
+    document.getElementById('github-thread').replaceWith(utterances);
 })();
 </script>
 <noscript>Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.</noscript>
