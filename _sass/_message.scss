@@ -6,6 +6,9 @@
 .message {
   margin-bottom: 1rem;
   padding: 1rem;
-  color: #717171;
-  background-color: #f9f9f9;
+  color: var(--text-main-color);
+  border-radius: 4px;
+  background-color: var(--background-alt-color);
+  transition-property: color, background-color;
+  transition-duration: var(--theme-transition-duration);
 }

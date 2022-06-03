@@ -6,8 +6,11 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: .5rem;
   font-weight: bold;
   line-height: 1.25;
-  color: #313131;
+  color: var(--text-main-color);
   text-rendering: optimizeLegibility;
+
+  transition-property: color;
+  transition-duration: var(--theme-transition-duration);
 }
 
 h1 {
@@ -35,7 +38,8 @@ p {
 }
 
 strong {
-  color: #303030;
+  color: var(--text-strong-color);
+  transition: color var(--theme-transition-duration);
 }
 
 ul, ol, dl {
@@ -55,15 +59,19 @@ hr {
   position: relative;
   margin: 1.5rem 0;
   border: 0;
-  border-top: 1px solid #eee;
-  border-bottom: 1px solid #fff;
+  border-top: 1px solid var(--text-alt2-color);
+
+  transition-property: border-top-color;
+  transition-duration: var(--theme-transition-duration);
 }
 
 abbr {
   font-size: 85%;
   font-weight: bold;
-  color: #555;
+  color: var(--text-strong-color);
   text-transform: uppercase;
+
+  transition: color var(--theme-transition-duration);
 
   &[title] {
     cursor: help;
@@ -74,8 +82,11 @@ abbr {
 blockquote {
   padding: .5rem 1rem;
   margin: .8rem 0;
-  color: #7a7a7a;
-  border-left: .25rem solid #e5e5e5;
+  color: var(--text-alt1-color);
+  border-left: .25rem solid var(--text-alt2-color);
+
+  transition-property: color, border-left-color;
+  transition-duration: var(--theme-transition-duration);
 
   p:last-child {
     margin-bottom: 0;

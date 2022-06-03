@@ -1,0 +1,48 @@
+:root {
+  --sun-rotation: 0deg;
+  --sun-opacity: 1;
+  --moon-rotation: -45deg;
+  --moon-opacity: 0;
+}
+[data-theme="dark"] {
+  --sun-rotation: 45deg;
+  --sun-opacity: 0;
+  --moon-rotation: 0deg;
+  --moon-opacity: 1;
+}
+
+.theme-toggle {
+  position: relative;
+  background: none;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+
+  .light-mode-icon {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    font-size: 2rem;
+    color: var(--text-main-color);
+
+    opacity: var(--sun-opacity);
+    transform:  translate(0, -50%) rotate(var(--sun-rotation));
+    transition-property: opacity, color, transform;
+    transition-timing-function: cubic-bezier(0.14, 0.75, 0.53, 1.56);
+    transition-duration: calc(var(--theme-transition-duration) + 0.1s);
+  }
+
+  .dark-mode-icon {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    font-size: 2rem;
+    color: var(--text-main-color);
+
+    opacity: var(--moon-opacity);
+    transform: translate(0, -50%) rotate(var(--moon-rotation));
+    transition-property: opacity, color, transform;
+    transition-timing-function: cubic-bezier(0.14, 0.75, 0.53, 1.56);
+    transition-duration: calc(var(--theme-transition-duration) + 0.1s);
+  }
+}
