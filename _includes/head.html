@@ -50,6 +50,14 @@
       const mode = darkMode ? 'dark' : 'light';
       rootDataset.theme = mode;
       localStorage.setItem('data-theme', mode);
+
+      const utterancesFrame = document.getElementsByClassName('utterances-frame')[0];
+      if (utterancesFrame) {
+        utterancesFrame.contentWindow.postMessage({
+          type: 'set-theme',
+          theme: 'github-' + mode,
+        }, 'https://utteranc.es');
+      }
     }
 
     reloadTheme(rootDataset.theme === 'dark');

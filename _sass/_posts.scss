@@ -36,6 +36,10 @@
   transition: color var(--theme-transition-duration);
 }
 
+time {
+  color: var(--text-alt2-color);
+  transition: color var(--theme-transition-duration);
+}
 
 // Related posts
 .related {

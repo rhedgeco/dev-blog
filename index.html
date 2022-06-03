@@ -4,6 +4,18 @@ title: Home
 ---
 
 <div class="intro">
-  <h1 class="greeting">{{ site.greeting }}</h1>
-  <p class="description">{{ site.description }}</p>
+    <h1 class="greeting">{{ site.greeting }}</h1>
+    <p class="description">{{ site.description }}</p>
 </div>
+
+<section class="posts">
+    <h2>Posts</h2>
+    <ul>
+        {% for post in site.posts %}
+        <li>
+            <a href="{{ post.url }}">{{ post.title }}</a>
+            <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%b %d, %Y" }}</time>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
