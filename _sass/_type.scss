@@ -8,9 +8,6 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.25;
   color: var(--text-main-color);
   text-rendering: optimizeLegibility;
-
-  transition-property: color;
-  transition-duration: var(--theme-transition-duration);
 }
 
 h1 {
@@ -39,7 +36,6 @@ p {
 
 strong {
   color: var(--text-strong-color);
-  transition: color var(--theme-transition-duration);
 }
 
 ul, ol, dl {
@@ -60,9 +56,6 @@ hr {
   margin: 1.5rem 0;
   border: 0;
   border-top: 1px solid var(--text-alt2-color);
-
-  transition-property: border-top-color;
-  transition-duration: var(--theme-transition-duration);
 }
 
 abbr {
@@ -70,8 +63,6 @@ abbr {
   font-weight: bold;
   color: var(--text-strong-color);
   text-transform: uppercase;
-
-  transition: color var(--theme-transition-duration);
 
   &[title] {
     cursor: help;
@@ -84,9 +75,6 @@ blockquote {
   margin: .8rem 0;
   color: var(--text-alt1-color);
   border-left: .25rem solid var(--text-alt2-color);
-
-  transition-property: color, border-left-color;
-  transition-duration: var(--theme-transition-duration);
 
   p:last-child {
     margin-bottom: 0;
@@ -110,6 +98,22 @@ a[href^="#fnref:"] {
   display: inline-block;
   margin-left: .1rem;
   font-weight: bold;
+
+  ::before {
+    content: "";
+    display: block;
+    height: 60px; /* fixed header height*/
+    margin: -60px 0 0; /* negative fixed header height */
+  }
+}
+
+// hack to fix page snapping
+a[href^="#fn:"]::before,
+a[href^="#fnref:"]::before {
+  content: "";
+  display: block;
+  height: 6rem; /* fixed header height*/
+  margin: -6rem 0 0; /* negative fixed header height */
 }
 
 // List of footnotes

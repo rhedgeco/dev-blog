@@ -13,8 +13,6 @@
 .post-title,
 .post-title a {
   color: var(--text-main-color);
-  transition-property: color;
-  transition-duration: var(--theme-transition-duration);
 }
 .page-title,
 .post-title {
@@ -23,8 +21,6 @@
 
 .description {
   color: var(--text-alt1-color);
-  transition-property: color;
-  transition-duration: var(--theme-transition-duration);
 }
 
 // Meta data line below post title
@@ -33,12 +29,10 @@
   margin-top: -.5rem;
   margin-bottom: 1rem;
   color: var(--text-alt2-color);
-  transition: color var(--theme-transition-duration);
 }
 
 time {
   color: var(--text-alt2-color);
-  transition: color var(--theme-transition-duration);
 }
 
 // Related posts
@@ -46,7 +40,6 @@ time {
   padding-top: 2rem;
   padding-bottom: 2rem;
   border-top: 1px solid var(--text-alt2-color);
-  transition: border-top-color var(--theme-transition-duration);
 }
 
 .related-posts {
@@ -61,7 +54,6 @@ time {
     small {
       font-size: 75%;
       color: var(--text-alt2-color);
-      transition: color var(--theme-transition-duration);
     }
 
     a:hover {
