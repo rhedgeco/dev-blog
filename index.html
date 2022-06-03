@@ -14,7 +14,7 @@ title: Home
         {% for post in site.posts limit:6 %}
         <a href="{{ post.url }}" class="blog-preview">
             {% if post.thumb %}
-            <img src="{{ post.url }}{{ post.thumb }}" alt="{{ post.title }}">
+            <img src="{{ post.thumb }}" alt="{{ post.title }}">
             {% else %}
             <img src="assets/images/default-thumbnail.jpg" alt="{{ post.title }}">
             {% endif %}
