@@ -1,8 +1,20 @@
 .recent-blogs {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(auto-fit, 12rem);
+  grid-template-columns: repeat(3, auto);
   gap: 1.5rem;
+}
+
+@media only screen and (max-width: 42rem) {
+  .recent-blogs {
+    grid-template-columns: repeat(2, auto);
+  }
+}
+
+@media only screen and (max-width: 25rem) {
+  .recent-blogs {
+    grid-template-columns: repeat(1, auto);
+  }
 }
 
 .blog-preview {
