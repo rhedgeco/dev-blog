@@ -107,15 +107,6 @@ a[href^="#fnref:"] {
   }
 }
 
-// hack to fix page snapping
-a[href^="#fn:"]::before,
-a[href^="#fnref:"]::before {
-  content: "";
-  display: block;
-  height: 6rem; /* fixed header height*/
-  margin: -6rem 0 0; /* negative fixed header height */
-}
-
 // List of footnotes
 .footnotes {
   margin-top: 2rem;

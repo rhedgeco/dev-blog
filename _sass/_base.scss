@@ -111,3 +111,11 @@ tbody tr:nth-child(odd) th {
   flex-direction: row;
   justify-content: space-between;
 }
+
+// scroll margin hack
+:target::before {
+  content: "";
+  display: block;
+  height: 4.5rem; /* fixed header height*/
+  margin: -4.5rem 0 0; /* negative fixed header height */
+}
