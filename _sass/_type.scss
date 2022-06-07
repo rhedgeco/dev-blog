@@ -3,11 +3,13 @@
 // Headings, body text, lists, and other misc typographic elements.
 
 h1, h2, h3, h4, h5, h6 {
+  padding-top: 1rem;
   margin-bottom: .5rem;
   font-weight: bold;
   line-height: 1.25;
   color: var(--text-main-color);
   text-rendering: optimizeLegibility;
+  scroll-margin-top: 4rem;
 
   a {
     font-size: 80%;
@@ -97,6 +99,10 @@ blockquote {
 //
 // See the example content post for an example.
 
+[id^="#fn:"], [id^="fnref:"] {
+  scroll-margin-top: 4rem;
+}
+
 // Footnote number within body text
 a[href^="#fn:"],
 // Back to footnote link
@@ -104,13 +110,6 @@ a[href^="#fnref:"] {
   display: inline-block;
   margin-left: .1rem;
   font-weight: bold;
-
-  ::before {
-    content: "";
-    display: block;
-    height: 60px; /* fixed header height*/
-    margin: -60px 0 0; /* negative fixed header height */
-  }
 }
 
 // List of footnotes
@@ -126,4 +125,9 @@ a[href^="#fnref:"] {
 .lead {
   font-size: 1.25rem;
   font-weight: 300;
+}
+
+article * img {
+  width: 100%;
+  height: auto;
 }

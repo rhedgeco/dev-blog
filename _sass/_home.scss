@@ -1,19 +1,19 @@
 .recent-blogs {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(3, minmax(10rem, 20rem));
   gap: 1.5rem;
 }
 
 @media only screen and (max-width: 42rem) {
   .recent-blogs {
-    grid-template-columns: repeat(2, auto);
+    grid-template-columns: repeat(2, minmax(10rem, 20rem));
   }
 }
 
 @media only screen and (max-width: 25rem) {
   .recent-blogs {
-    grid-template-columns: repeat(1, auto);
+    grid-template-columns: repeat(1, minmax(10rem, 20rem));
   }
 }
 
@@ -24,6 +24,7 @@
   }
   h3 {
     margin: 0.25rem;
+    padding-top: 0;
     font-size: 0.85rem;
   }
 
