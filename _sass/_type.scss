@@ -66,15 +66,29 @@ hr {
   border-top: 1px solid var(--text-alt2-color);
 }
 
-abbr {
-  font-size: 85%;
+abbr[data-title] {
+  position: relative;
+  font-size: 90%;
   font-weight: bold;
   color: var(--text-strong-color);
-  text-transform: uppercase;
+  text-decoration: underline dotted;
 
-  &[title] {
-    cursor: help;
-    border-bottom: 1px dotted #e5e5e5;
+  &:hover::after,
+  &:focus::after {
+    content: attr(data-title);
+
+    position: absolute;
+    left: 0;
+    bottom: -30px;
+    width: auto;
+    white-space: nowrap;
+
+    background-color: var(--background-alt2-color);
+    color: var(--text-alt1-color);
+    border-radius: 3px;
+    box-shadow: 1px 1px 5px 0 rgba(0,0,0,0.4);
+    font-size: 14px;
+    padding: 3px 5px;
   }
 }
 
