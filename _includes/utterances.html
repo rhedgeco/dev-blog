@@ -10,7 +10,7 @@
     utterances.setAttribute('crossorigin', 'anonymous');
     utterances.setAttribute('async', '');
 
-    let utterancesTheme = localStorage.getItem('data-theme') === 'dark' ? 'github-dark' : 'github-light';
+    let utterancesTheme = document.documentElement.dataset.theme === 'dark' ? 'github-dark' : 'github-light';
     utterances.setAttribute('theme', utterancesTheme);
 
     document.getElementById('github-thread').replaceWith(utterances);
