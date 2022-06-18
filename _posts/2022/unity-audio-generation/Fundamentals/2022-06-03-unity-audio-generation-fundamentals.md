@@ -1,10 +1,11 @@
 ---
 layout: post
 title: (Part 1) Runtime Audio Generation in the Unity Engine - Fundamentals
-thumb: /assets/images/2022/unity-audio-generation/thumbnail.jpg
+thumb: thumbnail.jpg
 ---
 
 <h1>Table of Contents</h1>
+
 - [**Introduction**](#introduction)
 - [**(Part 1) Fundamentals**](#fundamentals)
     - [How is sound made?](#how-is-sound-made)
@@ -14,13 +15,13 @@ thumb: /assets/images/2022/unity-audio-generation/thumbnail.jpg
         - [Filters](#filters)
 
 # Introduction
-
 In this series we will explore how sound is created digitally, and how we can take control of those processes ourselves. We will begin with some fundamentals, but the meat of this will be creating an efficient system for generating sound at runtime in C# using the Unity Engine.
 
 While we will spend a lot of time writing code for the Unity Engine specifically, the fundamentals and design choices will still hold for any other engine or language. So strap in, and let's get started!
 
-# Fundamentals
+---
 
+# Fundamentals
 ### How is sound made?
 While listening to music, you are able to hear many parts: guitar, drums, piano, vocals, etc. But the crazy part is that all of that information is encoded into a single wave. That is because it's also exactly how we hear sound. 
 
@@ -43,15 +44,14 @@ We know that the human ear can hear frequencies approximately between **20 hertz
 
 There are other reasons for the numbers that are chosen, but for our case it doesn't matter too much. With all the jargon and history aside, what you end up with is a series of points that represent a waveform for your speakers to produce like this:
 
-![Sin Wave](/assets/images/2022/unity-audio-generation/sin-wave.png)
+![Sin Wave](sin-wave.png)
 All those singers, guitars, and drums are encoded into this single stream of values.
 
 ### Creating digital signals
 Now that we know what digital waves are made up of, how can we craft them ourselves from nothing? There are many methods at which digital signals are generated and processed. In this section however, we will mainly cover **Oscillators** and **Filters** as these are the main ways that we will be generating sounds in the Unity Engine.
 
 ##### Oscillators
-
-![Oscillator](/assets/images/2022/unity-audio-generation/oscillator.jpg)
+![Oscillator](oscillator.jpg)
 
 Seen above is an industry standard audio synthesizer called Serum. Highlighted are two of its **Oscillators** with different **Wave Shapes**.
 
@@ -65,7 +65,7 @@ While oscillators produce unique wave sounds, filters process incoming waves to 
 These are more general and can take many forms. They can do anything from audio equalizing or adding reverb, to completely changing the shape and wave of the overall sound.
 
 <sub>parametric equalizer and reverb in FL Studio</sub>
-![Filters](/assets/images/2022/unity-audio-generation/filters.png)
+![Filters](filters.png)
 
 Multiple signals can be processed together to create unique sounds, and filters could even contain their own oscillators! These will usually make up the bulk of shaping how a sound is made.
 
