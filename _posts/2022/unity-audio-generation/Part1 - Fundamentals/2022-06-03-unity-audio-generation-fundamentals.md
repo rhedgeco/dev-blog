@@ -13,6 +13,7 @@ thumb: thumbnail.jpg
     - [Creating digital signals](#creating-digital-signals)
         - [Oscillators](#oscillators)
         - [Filters](#filters)
+- [🔗 **(Part 2) Creating Simple Sounds**](/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds)
 
 # Introduction
 In this series we will explore how sound is created digitally, and how we can take control of those processes ourselves. We will begin with some fundamentals, but the meat of this will be creating an efficient system for generating sound at runtime in C# using the Unity Engine.
@@ -69,4 +70,4 @@ These are more general and can take many forms. They can do anything from audio 
 
 Multiple signals can be processed together to create unique sounds, and filters could even contain their own oscillators! These will usually make up the bulk of shaping how a sound is made.
 
-***Future parts coming soon.***
+**Next Section → [Creating Simple Sounds](/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds)**

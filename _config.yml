@@ -1,5 +1,5 @@
 # Permalinks
-permalink: /:year/:month/:day/:title/
+permalink: /:year/:title/
 
 # Setup
 title: Ryan Hedgecock
