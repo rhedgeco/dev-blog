@@ -20,7 +20,12 @@
 .blog-preview {
   img {
     margin: 0;
-    border: 2px solid var(--background-alt-color);
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: contain;
+
+    background-color: var(--background-alt-color);
+    border: 1px solid var(--background-alt-color);
   }
   h3 {
     margin: 0.25rem;
