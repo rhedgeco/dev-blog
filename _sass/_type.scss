@@ -46,6 +46,10 @@ strong {
   color: var(--text-strong-color);
 }
 
+em {
+  color: var(--text-main-color);
+}
+
 ul, ol, dl {
   margin-top: 0;
   margin-bottom: 1rem;
