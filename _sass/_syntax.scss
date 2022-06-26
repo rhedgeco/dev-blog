@@ -2,6 +2,10 @@
   .highlight {
     color: #383838;
 
+    .c1 {
+      color: #248700;
+    }
+
     .k, .kt {
       color: #0f54d6;
     }
@@ -20,6 +24,10 @@
 [data-theme='dark'] {
   .highlight {
     color: #bdbdbd;
+
+    .c1 {
+      color: #85c46c;
+    }
 
     .k, .kt {
       color: #6c95eb;
