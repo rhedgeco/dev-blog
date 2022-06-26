@@ -7,13 +7,13 @@ thumb: thumbnail.jpg
 <h1>Table of Contents</h1>
 
 - [**Introduction**](#introduction)
-- [**(Part 1) Fundamentals**](#fundamentals)
+- [**(Part 0) Fundamentals**](#fundamentals)
     - [How is sound made?](#how-is-sound-made)
     - [Understanding Digital Waves](#understanding-digital-waves)
     - [Creating digital signals](#creating-digital-signals)
         - [Oscillators](#oscillators)
         - [Filters](#filters)
-- [🔗 **(Part 2) Creating Simple Sounds**](/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds)
+- [🔗 **(Part 1) Creating Simple Sounds**](/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds)
 
 # Introduction
 In this series we will explore how sound is created digitally, and how we can take control of those processes ourselves. We will begin with some fundamentals, but the meat of this will be creating an efficient system for generating sound at runtime in C# using the Unity Engine.
@@ -23,7 +23,7 @@ While we will spend a lot of time writing code for the Unity Engine specifically
 ---
 
 # Fundamentals
-### How is sound made?
+## How is sound made?
 While listening to music, you are able to hear many parts: guitar, drums, piano, vocals, etc. But the crazy part is that all of that information is encoded into a single wave. That is because it's also exactly how we hear sound. 
 
 *Sound is just a pressure wave in the air, and when it happens at the right speeds, we hear sound.*
@@ -34,7 +34,7 @@ We can think of the air in this situation, like the surface of the water in a po
 
 The same thing happens in the air with the musical instruments. All the sound waves converge to make one big complex wave the moment it hits your eardrum. The crazy part is that our brains have adapted to decode this information really well, allowing us to enjoy an entire symphony of music!
 
-### Understanding Digital Waves
+## Understanding Digital Waves
 While sound in the physical world is made up of waves, sound in the digital world is represented as a series of values *(aka. samples)* between **-1** and **1** that tell the speaker cone where to be at a given point in time. How many points there are within a 1-second period of time is called the **Sampling Rate**. And the speaker cone moving back and forth does its best to recreate the exact sound waves you would hear in the physical world.
 
 *One of the more common sampling rates is **44100 samples per second (44.1kHz). THATS A LOT OF SAMPLES*** 😮
@@ -48,10 +48,10 @@ There are other reasons for the numbers that are chosen, but for our case it doe
 ![Sin Wave](sin-wave.png)
 All those singers, guitars, and drums are encoded into this single stream of values.
 
-### Creating digital signals
+## Creating digital signals
 Now that we know what digital waves are made up of, how can we craft them ourselves from nothing? There are many methods at which digital signals are generated and processed. In this section however, we will mainly cover **Oscillators** and **Filters** as these are the main ways that we will be generating sounds in the Unity Engine.
 
-##### Oscillators
+### Oscillators
 ![Oscillator](oscillator.jpg)
 
 Seen above is an industry standard audio synthesizer called Serum. Highlighted are two of its **Oscillators** with different **Wave Shapes**.
@@ -60,7 +60,7 @@ Oscillators take a wave shape, and repeat the wave at a specified number of time
 
 Oscillators are used in a form of synthesis called **Additive Synthesis**. In a nutshell this means that sound is created by adding various different frequencies of wave shapes together. Multiple oscillators are usually used together to create unique sound.
 
-##### Filters
+### Filters
 While oscillators produce unique wave sounds, filters process incoming waves to modify the way a waveform sounds.
 
 These are more general and can take many forms. They can do anything from audio equalizing or adding reverb, to completely changing the shape and wave of the overall sound.
