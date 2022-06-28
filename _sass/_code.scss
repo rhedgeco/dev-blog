@@ -25,6 +25,11 @@ code.highlighter-rouge {
   background-color: var(--background-alt2-color);
 }
 
+a code.highlighter-rouge {
+  color: inherit;
+}
+
+
 pre {
   margin-top: 0;
   margin-bottom: 1rem;
