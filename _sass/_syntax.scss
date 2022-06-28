@@ -2,12 +2,16 @@
   .highlight {
     color: #383838;
 
-    .c1 {
+    .c1, .cm {
       color: #248700;
     }
 
     .k, .kt {
       color: #0f54d6;
+    }
+
+    .m {
+      color: #ab2f6b;
     }
 
     .nc {
@@ -29,12 +33,16 @@
   .highlight {
     color: #bdbdbd;
 
-    .c1 {
+    .c1, .cm {
       color: #85c46c;
     }
 
     .k, .kt {
       color: #6c95eb;
+    }
+
+    .m {
+      color: #ed94c0;
     }
 
     .nc {
