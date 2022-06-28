@@ -58,11 +58,11 @@ Now that we have an entry point into the sound engine, and understand the data l
 ## Establishing an architecture
 
 ### Native Buffers
-Since we are using the burst compiler, we cannot be passing around managed objects into Burst Compiled methods. Unfortunately this includes arrays, including `float[]`.
+Since we are using the burst compiler, we cannot be passing around managed objects into Burst Compiled methods. Unfortunately this includes arrays like `float[]`.
 
-We know we need performance and will have to use something other than managed arrays. You also my know of a struct called `NativeArray`, but this is unfortunately only able to be used in jobs, not burst compiled methods.
+We know we need performance and will have to use something other than managed arrays. You also may know of a struct called [`NativeArray`](https://docs.unity3d.com/ScriptReference/Unity.Collections.NativeArray_1.html), but this is unfortunately only able to be used in jobs and *not* burst compiled methods because it has a [`DisposeSentinel`](https://docs.unity3d.com/ScriptReference/Unity.Collections.LowLevel.Unsafe.DisposeSentinel.html) in it. So lets make our own.
 
-So lets make our own struct that allocates native memory for us called `BufferHandler`. This can be used in many places, so we will keep it generic for now. We have to be very careful to dispose these though because they could leave unmanaged memory on the heap if we aren't careful.
+We will need a first struct that allocates native memory for us. Let's call it `BufferHandler`. This can be used in many places, so we will keep it generic for now. One downside of not having the DisposeSentinel, is that if we aren't careful about disposing this ourselves, it can leave the data on the heap and start leaking memory. We will need to make sure to keep that in mind when working with this.
 
 ```csharp
 [StructLayout(LayoutKind.Sequential)]
@@ -88,9 +88,35 @@ public unsafe struct BufferHandler<T> : IDisposable where T : unmanaged
 }
 ```
 
-Let's also create a wrapper for this object that will be our `SynthBuffer`. We will store data in here about the properties of the buffer as well.
+Now that we are working in the native world. We will need a way to copy that data back to the managed world efficiently at some point. So let's add a method to our `BufferHandler` to copy data into a managed array. We will have to **pin** the managed array when we copy the memory so that it can't move while we copy. It can be released immediately after.
 
 ```csharp
+public void CopyTo(T[] managedArray)
+{
+    if (!Allocated) throw new ObjectDisposedException("Cannot copy. Buffer has been disposed");
+    int length = Math.Min(managedArray.Length, BufferLength);
+    GCHandle gcHandle = GCHandle.Alloc(managedArray, GCHandleType.Pinned);
+    UnsafeUtility.MemCpy((void*) gcHandle.AddrOfPinnedObject(), Pointer, length * sizeof(T));
+    gcHandle.Free();
+}
+```
+
+And while we are at it, lets create a method to copy into its fellow buffers for when we need to move data around later.
+
+```csharp
+public void CopyTo(BufferHandler<T> buffer)
+{
+    if (!Allocated) throw new ObjectDisposedException("Cannot copy. Source buffer has been disposed");
+    if (!buffer.Allocated) throw new ObjectDisposedException("Cannot copy. Dest buffer has been disposed");
+    int length = Math.Min(BufferLength, buffer.BufferLength);
+    UnsafeUtility.MemCpy(Pointer, buffer.Pointer, length * sizeof(T));
+}
+```
+
+Let's now also create a wrapper for this object to contain our audio buffer data. We will call this our `SynthBuffer`. We will store data in here about the properties of the buffer, so we can keep everything we need in one spot.
+
+```csharp
+[StructLayout(LayoutKind.Sequential)]
 public struct SynthBuffer : IDisposable
 {
     public int Channels { get; }
