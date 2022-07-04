@@ -11,14 +11,13 @@ thumb: thumbnail.jpg
 - [**(Part 1) Creating Simple Sounds**](#creating-simple-sounds)
   - [Project Setup](#project-setup)
   - [Hooking into the sound engine](#hooking-into-the-sound-engine)
-  - [Establishing an architecture](#establishing-an-architecture)
-    - [Native Buffers](#native-buffers)
+  - [Creating your first Synth](#creating-your-first-synth)
 
 # Creating Simple Sounds
 In this post we will cover getting a project set up and start laying down the groundwork for generating sound in the Unity Engine. The [previous post](/2022/unity-audio-generation-fundamentals) covered a basic understanding on what digital sound is, and also provided some insight into the vocabulary we will be referencing. If you have never dealt with digital sound manipulation before, it may be worth your time to go back and take a look.
 
 ## Project Setup
-Create a new Unity project. The editor used in this post is version **2020.3.19f1**.
+Create a new Unity project. The editor used in this post is version **2020.3.19f1**. I will be calling this project **Synthic** because I thought the name sounded cool. *(I will also be using the 'synth' verbiage in a lot of my classes too)*
 
 Unity comes with a BUNCH of preinstalled packages in the [package manager](https://docs.unity3d.com/Packages/com.unity.package-manager-ui@1.8/manual/index.html). For the sake of keeping things clean, we will remove pretty much all of them, and only add ones we know we will need right now.
 
@@ -31,14 +30,10 @@ The only other package I have is one for my specific <abbr data-title="Integrate
 With our editor up and running, lets start hooking into the sound engine.
 
 ## Hooking into the sound engine
-Unity's MonoBehaviour allows for a method called `OnAudioFilterRead`. This is usually used to process incoming audio, but nothing is stopping us from *creating* audio in the first place.
-
-Let's create a new MonoBehaviour and call it `SynthOut`, and add the filter method. This takes in a `float` array and an `int` to represent the number of channels.
-
-We will create chains of sound generators and filters, but this class will ultimately be the point where the sound gets inserted back into Unity's built-in sound engine.
+Unity's MonoBehaviour allows for a method called `OnAudioFilterRead`. This is usually used to process incoming audio, but nothing is stopping us from *creating* audio in the first place. The only requirement is that we have an empty [`AudioSource`](https://docs.unity3d.com/Manual/class-AudioSource.html) component on our game object as well.
 
 ```csharp
-public class SynthOut : MonoBehaviour
+public class AudioGenerator : MonoBehaviour
 {
     private void OnAudioFilterRead(float[] data, int channels)
     {
@@ -53,88 +48,92 @@ The order of the data when in 2 channel mode is an interleaving of the samples a
 
 ![interleaving channels](interleaving.jpg)
 
-Now that we have an entry point into the sound engine, and understand the data layout, let's build a system around it to make it easy to expand into many types of sounds.
+Now that we have an entry point into the sound engine, and understand the data layout, let's build a simple synth to get us started.
 
-## Establishing an architecture
+## Creating your first Synth
 
-### Native Buffers
-Since we are using the burst compiler, we cannot be passing around managed objects into Burst Compiled methods. Unfortunately this includes arrays like `float[]`.
+First we need to make a new script. I'm calling mine `SimpleSineGenerator` as we will be generating a single sine wave with it. For this first generator, we are not going to set up an architecture yet, or worry about performance. This will simply be an introduction into how a generator may be constructed.
 
-We know we need performance and will have to use something other than managed arrays. You also may know of a struct called [`NativeArray`](https://docs.unity3d.com/ScriptReference/Unity.Collections.NativeArray_1.html), but this is unfortunately only able to be used in jobs and *not* burst compiled methods because it has a [`DisposeSentinel`](https://docs.unity3d.com/ScriptReference/Unity.Collections.LowLevel.Unsafe.DisposeSentinel.html) in it. So lets make our own.
-
-We will need a first struct that allocates native memory for us. Let's call it `BufferHandler`. This can be used in many places, so we will keep it generic for now. One downside of not having the DisposeSentinel, is that if we aren't careful about disposing this ourselves, it can leave the data on the heap and start leaking memory. We will need to make sure to keep that in mind when working with this.
+There are a few parameters we could expose in the inspector. We will use `frequency` and `amplitude` for this example. Here is what our class should look like right now:
 
 ```csharp
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct BufferHandler<T> : IDisposable where T : unmanaged
+public class SimpleSineGenerator : MonoBehaviour
 {
-    public int RawLength { get; }
-    public T* Pointer { get; private set; }
-    public bool Allocated => (IntPtr) Pointer != IntPtr.Zero;
+    [SerializeField, Range(0, 1)] private float amplitude = 0.5f;
+    [SerializeField] private float frequency = 261.62f; // middle C
 
-    public BufferHandler(int rawLength)
+    private void OnAudioFilterRead(float[] data, int channels)
     {
-        RawLength = rawLength;
-        Pointer = (T*) UnsafeUtility.Malloc(RawLength * sizeof(T), 
-            UnsafeUtility.AlignOf<T>(), Allocator.Persistent);
-    }
-
-    public void Dispose()
-    {
-        if (!Allocated) return;
-        UnsafeUtility.Free(Pointer, Allocator.Persistent);
-        Pointer = (T*) IntPtr.Zero;
+        // TODO: Generate Sine Wave
     }
 }
 ```
 
-Now that we are working in the native world. We will need a way to copy that data back to the managed world efficiently at some point. So let's add a method to our `BufferHandler` to copy data into a managed array. We will have to **pin** the managed array when we copy the memory so that it can't move while we copy. It can be released immediately after.
+As we generate audio, we will need to keep track of where in the wave we currently are. To do this, let's create a private variable to track how many samples we have generated. We can convert that number later into a *phase*[^fn-phase].
 
+We also need to keep track of the current *Sampling Rate*. We will grab this in the `Awake` method and, for now, just assume it doesn't change.
+
+Add these variables to the class where you like:
 ```csharp
-public void CopyTo(T[] managedArray)
-{
-    if (!Allocated) throw new ObjectDisposedException("Cannot copy. Buffer has been disposed");
-    int length = Math.Min(managedArray.Length, BufferLength);
-    GCHandle gcHandle = GCHandle.Alloc(managedArray, GCHandleType.Pinned);
-    UnsafeUtility.MemCpy((void*) gcHandle.AddrOfPinnedObject(), Pointer, length * sizeof(T));
-    gcHandle.Free();
-}
+private int _sampleRate;
+private long _currentSample;
 ```
 
-And while we are at it, lets create a method to copy into its fellow buffers for when we need to move data around later.
+Now lets get to the meat of the generation. We will start by looping over and operating on all the samples in the buffer. After we will increase the `_currentSample` by the number of samples processed.
 
 ```csharp
-public void CopyTo(BufferHandler<T> buffer)
+private void OnAudioFilterRead(float[] data, int channels)
 {
-    if (!Allocated) throw new ObjectDisposedException("Cannot copy. Source buffer has been disposed");
-    if (!buffer.Allocated) throw new ObjectDisposedException("Cannot copy. Dest buffer has been disposed");
-    int length = Math.Min(BufferLength, buffer.BufferLength);
-    UnsafeUtility.MemCpy(Pointer, buffer.Pointer, length * sizeof(T));
-}
-```
-
-Let's now also create a wrapper for this object to contain our audio buffer data. We will call this our `SynthBuffer`. We will store data in here about the properties of the buffer, so we can keep everything we need in one spot.
-
-```csharp
-[StructLayout(LayoutKind.Sequential)]
-public struct SynthBuffer : IDisposable
-{
-    public int Channels { get; }
-    public int BufferLength { get; }
-    public int ChannelLength { get; }
-    public BufferHandler<float> Handler { get; }
-
-    public SynthBuffer(int bufferLength, int channels)
+    for (int sample = 0; sample < data.Length; sample += channels)
     {
-        Channels = channels;
-        BufferLength = bufferLength;
-        ChannelLength = bufferLength / channels;
-        Handler = new BufferHandler<float>(BufferLength);
+        // TODO: operate on samples
     }
 
-    public void Dispose()
+    // increase sample progress for next iteration
+    // this needs to be divided by the channels value to account for
+    // the fact that all channels are represented in the same buffer
+    _currentSample += data.Length / channels;
+}
+```
+
+While looping over the samples we need to do the following:
+1. calculate the exact sample number for the current sample
+2. convert that sample number into a *phase* based on the *frequency* and *sample rate*
+3. calculate what that phase value represents on a sine wave
+4. apply that value to every channel in the buffer
+
+Here is the logic I added to my loop:
+```csharp
+for (int sample = 0; sample < data.Length; sample += channels)
+{
+    // get total sample progress
+    long totalSamples = _currentSample + sample / channels;
+
+    // convert sample progress into a phase based on frequency
+    float phase = totalSamples * frequency / _sampleRate % 1;
+
+    // get value of phase on a sine wave
+    float value = Mathf.Sin(phase * 2 * Mathf.PI) * amplitude;
+
+    // populate all channels with the values
+    for (int channel = 0; channel < channels; channel++)
     {
-        Handler.Dispose();
+        data[sample + channel] = value;
     }
 }
 ```
+
+With all that completed, make sure you apply this component with an empty audio source onto a game object, and hit play!
+
+You should hear a middle C sine wave! *(assuming you haven't changed the frequency)*
+
+It should sound like this:
+
+<audio controls>
+  <source src="sine.wav" type="audio/mpeg">
+  Your browser does not support the audio element.
+</audio>
+
+---
+
+[^fn-phase]: ***Phase*** is the current position within one cycle of a wave. [See Wikipedia Definition](https://en.wikipedia.org/wiki/Phase_(waves)) <br> For simplicity we use a value between 0 and 1, but this is also commonly between 0 and 2π.
