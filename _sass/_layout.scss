@@ -15,3 +15,20 @@ footer {
   margin-bottom: 2rem;
   color: var(--text-alt2-color);
 }
+
+#scroll-btn {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  right: 30px;
+  z-index: 99;
+  background-color: var(--background-alt-color);
+  color: var(--text-main-color);
+  cursor: pointer;
+  padding: 15px;
+  border-radius: 10px;
+}
+
+#scroll-btn:hover {
+  background-color: var(--background-alt2-color);
+}
