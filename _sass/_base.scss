@@ -106,6 +106,10 @@ tbody tr:nth-child(odd) th {
   background-color: var(--background-alt2-color);
 }
 
+li {
+  color: var(--text-alt1-color);
+}
+
 .flex-row-between {
   display: flex;
   flex-direction: row;
