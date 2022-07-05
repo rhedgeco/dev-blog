@@ -151,7 +151,7 @@ There will also be a private utility method `EnsureBufferAllocated` that will be
 ```csharp
 public abstract class SynthProvider : MonoBehaviour
 {
-    private NativeDisposer<SynthBuffer> _buffer;
+    private NativeDisposer<SynthBuffer> _buffer = new NativeDisposer<SynthBuffer>();
 
     // processes and fills a managed buffer with sound data
     public void FillBuffer(float[] buffer, int channels)
