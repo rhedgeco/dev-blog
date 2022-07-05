@@ -151,32 +151,31 @@ There will also be a private utility method `EnsureBufferAllocated` that will be
 ```csharp
 public abstract class SynthProvider : MonoBehaviour
 {
-    private SynthBuffer _buffer;
+    private NativeDisposer<SynthBuffer> _buffer;
 
     // processes and fills a managed buffer with sound data
-    public void FillBuffer(ref float[] buffer, int channels)
+    public void FillBuffer(float[] buffer, int channels)
     {
-        if (!Application.isPlaying) return;
         EnsureBufferAllocated(buffer.Length, channels);
-        ProcessBuffer(ref _buffer);
-        _buffer.Handler.CopyTo(buffer);
+        ProcessBuffer(ref _buffer.Object);
+        _buffer.Object.Handler.CopyTo(buffer);
     }
     
     // processes and fills a native buffer with sound data
     public void FillBuffer(ref SynthBuffer buffer)
     {
-        if (!Application.isPlaying || !buffer.Handler.Allocated) return;
+        if (!buffer.Handler.Allocated) return;
         EnsureBufferAllocated(buffer.Handler.Length, buffer.Channels);
-        ProcessBuffer(ref _buffer);
-        _buffer.Handler.CopyTo(buffer.Handler);
+        ProcessBuffer(ref _buffer.Object);
+        _buffer.Object.Handler.CopyTo(buffer.Handler);
     }
     
     // ensures that our cached buffer has the same properties as the incoming buffer
     private void EnsureBufferAllocated(int bufferLength, int channels)
     {
-        if (_buffer.Handler.Length == bufferLength && _buffer.Channels == channels) return;
-        if (_buffer.Handler.Allocated) _buffer.Dispose();
-        _buffer = new SynthBuffer(bufferLength, channels);
+        if (_buffer.Object.Handler.Length == bufferLength && _buffer.Object.Channels == channels) return;
+        if (_buffer.Object.Handler.Allocated) _buffer.Object.Dispose();
+        _buffer.Object = new SynthBuffer(bufferLength, channels);
     }
 
     // override for creating custom providers
