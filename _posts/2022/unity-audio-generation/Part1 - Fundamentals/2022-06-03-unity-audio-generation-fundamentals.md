@@ -1,19 +1,20 @@
 ---
 layout: post
-title: (Part 1) Runtime Audio Generation in the Unity Engine - Fundamentals
+title: (Part 0) Runtime Audio Generation in the Unity Engine - Fundamentals
 thumb: thumbnail.jpg
 ---
 
 <h1>Table of Contents</h1>
 
-- [**Introduction**](#introduction)
-- [**(Part 0) Fundamentals**](#fundamentals)
+- [🟢 **Introduction**](#introduction)
+- [🟢 **(Part 0) Fundamentals**](#fundamentals)
     - [How is sound made?](#how-is-sound-made)
     - [Understanding Digital Waves](#understanding-digital-waves)
     - [Creating digital signals](#creating-digital-signals)
         - [Oscillators](#oscillators)
         - [Filters](#filters)
 - [🔗 **(Part 1) Creating Simple Sounds**](/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds)
+- [🔗 **(Part 2) Performance and Architecture**](/2022/unity-audio-generation-performance#performance-and-architecture)
 
 # Introduction
 In this series we will explore how sound is created digitally, and how we can take control of those processes ourselves. We will begin with some fundamentals, but the meat of this will be creating an efficient system for generating sound at runtime in C# using the Unity Engine.

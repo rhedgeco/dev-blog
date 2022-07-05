@@ -1,6 +1,6 @@
 ---
 layout: post
-title: (Part 2) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds
+title: (Part 1) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds
 thumb: thumbnail.jpg
 ---
 
@@ -8,13 +8,14 @@ thumb: thumbnail.jpg
 
 - [🔗 **Introduction**](/2022/unity-audio-generation-fundamentals/#introduction)
 - [🔗 **(Part 0) Fundamentals**](/2022/unity-audio-generation-fundamentals/#fundamentals)
-- [**(Part 1) Creating Simple Sounds**](#creating-simple-sounds)
+- [🟢 **(Part 1) Creating Simple Sounds**](#creating-simple-sounds)
   - [Project Setup](#project-setup)
   - [Hooking into the sound engine](#hooking-into-the-sound-engine)
   - [Creating your first Synth](#creating-your-first-synth)
+- [🔗 **(Part 2) Performance and Architecture**](/2022/unity-audio-generation-performance#performance-and-architecture)
 
 # Creating Simple Sounds
-In this post we will cover getting a project set up and start laying down the groundwork for generating sound in the Unity Engine. The [previous post](/2022/unity-audio-generation-fundamentals) covered a basic understanding on what digital sound is, and also provided some insight into the vocabulary we will be referencing. If you have never dealt with digital sound manipulation before, it may be worth your time to go back and take a look.
+In this post we will cover getting a project set up and start laying down the groundwork for generating sound in the Unity Engine. The previous post covered a basic understanding of what digital sound is, and also provided some insight into the vocabulary we will be referencing. If you have never dealt with digital sound manipulation before, it may be worth your time to [go back and take a look](/2022/unity-audio-generation-fundamentals).
 
 ## Project Setup
 Create a new Unity project. The editor used in this post is version **2020.3.19f1**. I will be calling this project **Synthic** because I thought the name sounded cool. *(I will also be using the 'synth' verbiage in a lot of my classes too)*
@@ -129,10 +130,9 @@ You should hear a middle C sine wave! *(assuming you haven't changed the frequen
 
 It should sound like this:
 
-<audio controls>
-  <source src="sine.wav" type="audio/mpeg">
-  Your browser does not support the audio element.
-</audio>
+{% include embed-audio.html src="sine.wav" %}
+
+**Next Section → [Performance and Architecture](/2022/unity-audio-generation-performance/#performanxe-and-architecture)**
 
 ---
 
