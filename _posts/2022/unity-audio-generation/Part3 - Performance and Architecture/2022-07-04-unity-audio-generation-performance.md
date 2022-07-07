@@ -89,31 +89,73 @@ public void CopyTo(BufferHandler<T> buffer)
 }
 ```
 
+We will also need to set and get items in the buffer. We can always use the pointers for this, but it could be nice to have an abstraction for it too. To do this, lets add a [indexer](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/indexers/).
+
+```csharp
+// use pointers to access and set the data in the buffer
+public T this[int index]
+{
+    get
+    {
+        CheckAndThrow(index);
+        return *(T*) ((long) Pointer + index * sizeof(T));
+    }
+    
+    set
+    {
+        CheckAndThrow(index);
+        *(T*) ((long) Pointer + index * sizeof(T)) = value;
+    }
+}
+
+// utility method to validate an index in the buffer
+private void CheckAndThrow(int index)
+{
+    if (!Allocated) throw new ObjectDisposedException("Buffer is disposed");
+    if (index >= Length || index < 0)
+        throw new IndexOutOfRangeException($"index:{index} out of range:0-{Length}");
+}
+```
+
 Let's now also create a wrapper for this object to contain our audio buffer data. We will call this our `SynthBuffer`. We will store data in here about the properties of the buffer, so we can keep everything we need in one spot.
+
+We will also expose some methods to pass through important information from the buffer itself like the CopyTo and indexers.
 
 ```csharp
 [StructLayout(LayoutKind.Sequential)]
 public struct SynthBuffer : IDisposable
 {
+    private BufferHandler<float> _buffer;
+
     public int Channels { get; }
-    public int BufferLength { get; }
     public int ChannelLength { get; }
-    public BufferHandler<float> Handler { get; }
+    public int Length => _buffer.Length;
+    public bool Allocated => _buffer.Allocated;
 
     public SynthBuffer(int bufferLength, int channels)
     {
         Channels = channels;
-        BufferLength = bufferLength;
         ChannelLength = bufferLength / channels;
-        Handler = new BufferHandler<float>(BufferLength);
+        _buffer = new BufferHandler<float>(bufferLength);
     }
+
+    public float this[int index]
+    {
+        get => _buffer[index];
+        set => _buffer[index] = value;
+    }
+
+    public void CopyTo(float[] managedArray) => _buffer.CopyTo(managedArray);
+    public void CopyTo(ref SynthBuffer buffer) => _buffer.CopyTo(buffer._buffer);
 
     public void Dispose()
     {
-        Handler.Dispose();
+        _buffer.Dispose();
     }
 }
 ```
+
+
 
 Before moving forward, lets create one more thing to make our lives easier. I call this the `NativeDisposer`. It will keep track of an `unmanaged IDisposable` object and make sure the data is cleaned up. We can use this to hold our buffers and keep track of their contents for us in certain situations.
 
@@ -158,23 +200,23 @@ public abstract class SynthProvider : MonoBehaviour
     {
         EnsureBufferAllocated(buffer.Length, channels);
         ProcessBuffer(ref _buffer.Object);
-        _buffer.Object.Handler.CopyTo(buffer);
+        _buffer.Object.CopyTo(buffer);
     }
-    
+
     // processes and fills a native buffer with sound data
     public void FillBuffer(ref SynthBuffer buffer)
     {
-        if (!buffer.Handler.Allocated) return;
-        EnsureBufferAllocated(buffer.Handler.Length, buffer.Channels);
+        if (!buffer.Allocated) return;
+        EnsureBufferAllocated(buffer.Length, buffer.Channels);
         ProcessBuffer(ref _buffer.Object);
-        _buffer.Object.Handler.CopyTo(buffer.Handler);
+        _buffer.Object.CopyTo(ref buffer);
     }
-    
+
     // ensures that our cached buffer has the same properties as the incoming buffer
     private void EnsureBufferAllocated(int bufferLength, int channels)
     {
-        if (_buffer.Object.Handler.Length == bufferLength && _buffer.Object.Channels == channels) return;
-        if (_buffer.Object.Handler.Allocated) _buffer.Object.Dispose();
+        if (_buffer.Object.Length == bufferLength && _buffer.Object.Channels == channels) return;
+        if (_buffer.Object.Allocated) _buffer.Object.Dispose();
         _buffer.Object = new SynthBuffer(bufferLength, channels);
     }
 
@@ -232,29 +274,27 @@ public class SineGenerator : SynthProvider
 
 Now we need to define a static method to be burst compiled called `BurstSine`. *(all burst compiled methods have to be static)* We will also tag it with the attribute `[BurstCompile]`. We will also have it return a long to represent the number of samples progressed, as we cannot change instance variables from within a static method.
 
-Referencing our previous `SimpleSineGenerator`, we can write this pretty easily by converting our managed array logic to our new native array logic, and assigning values using pointer arithmetic.
+Referencing our previous `SimpleSineGenerator`, we can write this pretty easily by converting our managed array logic to our new native buffer logic.
 
 ```csharp
 [BurstCompile]
 private static unsafe long BurstSine(ref SynthBuffer buffer,
     long currentSample, int sampleRate, float amplitude, float frequency)
 {
-    for (int sample = 0; sample < buffer.Handler.Length; sample += buffer.Channels)
+    for (int sample = 0; sample < buffer.Length; sample += buffer.Channels)
     {
         // get total sample progress
         long totalSamples = currentSample + sample / buffer.Channels;
-        
+    
         // convert sample progress into a phase based on frequency
         float phase = totalSamples * frequency / sampleRate % 1;
-        
+    
         // get value of phase on a sine wave
         float value = math.sin(phase * 2 * math.PI) * amplitude;
-        
+    
         for (int channel = 0; channel < buffer.Channels; channel++)
         {
-            // use pointers here for fast application of values
-            long pointerOffset = (sample + channel) * sizeof(float);
-            *(float*) ((long) buffer.Handler.Pointer + pointerOffset) = value;
+            buffer[sample + channel] = value;
         }
     }
 
