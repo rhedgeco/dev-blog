@@ -278,7 +278,7 @@ Referencing our previous `SimpleSineGenerator`, we can write this pretty easily 
 
 ```csharp
 [BurstCompile]
-private static unsafe long BurstSine(ref SynthBuffer buffer,
+private static long BurstSine(ref SynthBuffer buffer,
     long currentSample, int sampleRate, float amplitude, float frequency)
 {
     for (int sample = 0; sample < buffer.Length; sample += buffer.Channels)
