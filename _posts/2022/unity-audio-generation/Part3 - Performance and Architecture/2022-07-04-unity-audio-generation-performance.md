@@ -286,8 +286,11 @@ private static long BurstSine(ref SynthBuffer buffer,
         // get total sample progress
         long totalSamples = currentSample + sample / buffer.Channels;
     
+        // create a divisor for converting samples to phase
+        float sampleFrequency = sampleRate / frequency;
+
         // convert sample progress into a phase based on frequency
-        float phase = totalSamples * frequency / sampleRate % 1;
+        float phase = totalSamples % sampleFrequency / sampleFrequency;
     
         // get value of phase on a sine wave
         float value = math.sin(phase * 2 * math.PI) * amplitude;
