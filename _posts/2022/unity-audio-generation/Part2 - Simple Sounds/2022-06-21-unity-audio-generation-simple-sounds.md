@@ -70,54 +70,45 @@ public class SimpleSineGenerator : MonoBehaviour
 }
 ```
 
-As we generate audio, we will need to keep track of where in the wave we currently are. To do this, let's create a private variable to track how many samples we have generated. We can convert that number later into a *phase*[^fn-phase].
+As we generate audio, we will need to keep track of where in the wave we currently are. To do this, let's create a `private double` to track of the current *phase*[^fn-phase] of our wave.
 
 We also need to keep track of the current *Sampling Rate*. We will grab this in the `Awake` method and, for now, just assume it doesn't change.
 
 Add these variables to the class where you like:
 ```csharp
+private double _phase;
 private int _sampleRate;
-private long _currentSample;
 ```
 
-Now lets get to the meat of the generation. We will start by looping over and operating on all the samples in the buffer. After we will increase the `_currentSample` by the number of samples processed.
+Now lets get to the meat of the generation. We will start calculating how much the phase should change after each sample iteration. Then we will proceed to loop over each sample in the buffer to calculate its wave value.
 
 ```csharp
 private void OnAudioFilterRead(float[] data, int channels)
 {
+    // calculate how much the phase should change after each sample
+    double phaseIncrement = frequency / _sampleRate;
+
     for (int sample = 0; sample < data.Length; sample += channels)
     {
         // TODO: operate on samples
     }
-
-    // increase sample progress for next iteration
-    // this needs to be divided by the channels value to account for
-    // the fact that all channels are represented in the same buffer
-    _currentSample += data.Length / channels;
 }
 ```
 
 While looping over the samples we need to do the following:
-1. calculate the exact sample number for the current sample
-2. convert that sample number into a *phase* based on the *frequency* and *sample rate*
-3. calculate what that phase value represents on a sine wave
-4. apply that value to every channel in the buffer
+1. calculate the value for the current phase of the sine wave
+2. increment the phase value for the next iteration
+3. populate all the audio channels with the current wave value
 
 Here is the logic I added to my loop:
 ```csharp
 for (int sample = 0; sample < data.Length; sample += channels)
 {
-    // get total sample progress
-    long totalSamples = _currentSample + sample / channels;
-
-    // create a divisor for converting samples to phase
-    float sampleFrequency = _sampleRate / frequency;
-  
-    // convert sample progress into a phase based on frequency
-    float phase = totalSamples % sampleFrequency / sampleFrequency;
-
     // get value of phase on a sine wave
-    float value = Mathf.Sin(phase * 2 * Mathf.PI) * amplitude;
+    float value = Mathf.Sin((float) _phase * 2 * Mathf.PI) * amplitude;
+    
+    // increment _phase value for next iteration
+    _phase = (_phase + phaseIncrement) % 1;
 
     // populate all channels with the values
     for (int channel = 0; channel < channels; channel++)
