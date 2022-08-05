@@ -11,6 +11,10 @@ thumb: thumbnail.jpg
 - [🔗 **(Part 1) Creating Simple Sounds**](/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds)
 - [🟢 **(Part 2) Performance and Architecture**](#performance-and-architecture)
   - [Native Buffers](#native-buffers)
+    - [Assembly Definitions](#assembly-definitions)
+    - [`BufferHandler<T>`](#buffer-handler)
+    - [`INativeObject` & `NativeBox<T>`](#inativeobject--nativeboxt)
+    - [`SynthBuffer`](#synthbuffer)
   - [Buffer Pipeline](#buffer-pipeline)
     - [`SynthProvider`](#synthprovider)
     - [`SynthOut`](#synthout)
@@ -34,27 +38,32 @@ So let's create some tools for us to use to squeeze every drop of performance we
 
 One drawback of native code is that we can no longer pass in managed objects. Unfortunately this includes arrays like `float[]`. You also may know of a struct called [`NativeArray`](https://docs.unity3d.com/ScriptReference/Unity.Collections.NativeArray_1.html), but this is unfortunately only able to be used in jobs and *not* burst compiled methods because it has a [`DisposeSentinel`](https://docs.unity3d.com/ScriptReference/Unity.Collections.LowLevel.Unsafe.DisposeSentinel.html) in it. So lets make our own.
 
-<div class="message">
-  We will be using the `unsafe` keyword when working with native code. To allow this in your project go to <strong>Edit > Project Settings > Player > Other Settings</strong> and check the box at the bottom to <strong>Allow 'unsafe' Code</strong>.
-</div>
+### Assembly Definitions
+When working with native code, we will have to use the `unsafe` keyword. This is not normally allowed in our unity code without modifying the unity settings. However, we can use something called an **Assembly Definition** to section off a portion of our code into its own assembly. We can expressly enable unsafe code here, and keep it contained to this assembly as well.
 
-We will need a first struct that allocates native memory for us. Let's call it `BufferHandler`. This can be used in many places, so we will keep it generic for now. One downside of not having the DisposeSentinel, is that if we aren't careful about disposing this ourselves, it can leave the data on the heap and start leaking memory. We will need to make sure to keep that in mind when working with this.
+![Assembly Definition Settings](unsafe.png)
+
+With a native assembly set up, lets create our buffer library.
+
+### `BufferHandler<T>`
+
+We will need a first struct that allocates native memory for us. Let's call it `BufferHandler`. This can be used in many places, so we will keep it generic for now. We will also keep it internal One downside of not having the DisposeSentinel, is that if we aren't careful about disposing this ourselves, it can leave the data on the heap and start leaking memory. We will need to make sure to keep that in mind when working with this, and set up a structure for it to be used safely.
 
 ```csharp
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct BufferHandler<T> : IDisposable where T : unmanaged
+internal unsafe struct BufferHandler<T> : IDisposable where T : unmanaged
 {
-    public int Length { get; }
+    public int Length { get; private set; }
     public T* Pointer { get; private set; }
     public bool Allocated => (IntPtr) Pointer != IntPtr.Zero;
 
     public BufferHandler(int length)
     {
         Length = length;
-        Pointer = (T*) UnsafeUtility.Malloc(Length * sizeof(T), 
+        Pointer = (T*) UnsafeUtility.Malloc(Length * sizeof(T),
             UnsafeUtility.AlignOf<T>(), Allocator.Persistent);
     }
-
+    
     public void Dispose()
     {
         if (!Allocated) return;
@@ -100,7 +109,7 @@ public T this[int index]
         CheckAndThrow(index);
         return *(T*) ((long) Pointer + index * sizeof(T));
     }
-    
+
     set
     {
         CheckAndThrow(index);
@@ -117,28 +126,79 @@ private void CheckAndThrow(int index)
 }
 ```
 
-Let's now also create a wrapper for this object to contain our audio buffer data. We will call this our `SynthBuffer`. We will store data in here about the properties of the buffer, so we can keep everything we need in one spot.
+### `INativeObject` & `NativeBox<T>`
+To make sure that we have a safe way to use the native buffers in this library, we will create a way of wrapping it up safely.
+
+First lets create an interface to represent a native object called `INativeObject`:
+```csharp
+public interface INativeObject
+{
+    public bool Allocated { get; }
+    internal void ReleaseResources();
+}
+```
+
+And we will also create a nice wrapper for this to be used outside the library called `NativeBox<T>`:
+```csharp
+public class NativeBox<T> : IDisposable where T : INativeObject
+{
+    private T _data;
+    public ref T Data => ref _data;
+    public bool Allocated => _data.Allocated;
+
+    internal NativeBox(T data)
+    {
+        _data = data;
+    }
+
+    ~NativeBox()
+    {
+        ReleaseUnmanagedResources();
+    }
+
+    private void ReleaseUnmanagedResources()
+    {
+        if (!_data.Allocated) return;
+        _data.ReleaseResources();
+    }
+
+    public void Dispose()
+    {
+        ReleaseUnmanagedResources();
+        GC.SuppressFinalize(this);
+    }
+}
+```
+
+### `SynthBuffer`
+
+Let's now create the object to contain our audio buffer data. We will call this our `SynthBuffer`. We will store data in here about the properties of the buffer, so we can keep everything we need in one spot.
 
 We will also expose some methods to pass through important information from the buffer itself like the CopyTo and indexers.
 
-```csharp
-[StructLayout(LayoutKind.Sequential)]
-public struct SynthBuffer : IDisposable
-{
-    private BufferHandler<float> _buffer;
+The important part is that there is no constructor, but instead a `Construct` method that creates and returns a `NativeBox<SynthBuffer>` object. This means that no matter what our buffer is always used in a safe way.
 
-    public int Channels { get; }
-    public int ChannelLength { get; }
+```csharp
+public struct SynthBuffer : INativeObject
+{ 
+    private BufferHandler<float> _buffer;
+    
+    public int Channels { get; private set; }
+    public int ChannelLength { get; private set; }
     public int Length => _buffer.Length;
     public bool Allocated => _buffer.Allocated;
 
-    public SynthBuffer(int bufferLength, int channels)
+    public static NativeBox<SynthBuffer> Construct(int bufferLength, int channels)
     {
-        Channels = channels;
-        ChannelLength = bufferLength / channels;
-        _buffer = new BufferHandler<float>(bufferLength);
+        SynthBuffer buffer = new SynthBuffer
+        {
+            Channels = channels,
+            ChannelLength = bufferLength / channels,
+            _buffer = new BufferHandler<float>(bufferLength)
+        };
+        return new NativeBox<SynthBuffer>(buffer);
     }
-
+    
     public float this[int index]
     {
         get => _buffer[index];
@@ -148,35 +208,10 @@ public struct SynthBuffer : IDisposable
     public void CopyTo(float[] managedArray) => _buffer.CopyTo(managedArray);
     public void CopyTo(ref SynthBuffer buffer) => _buffer.CopyTo(buffer._buffer);
 
-    public void Dispose()
-    {
-        _buffer.Dispose();
-    }
+
+    void INativeObject.ReleaseResources() => _buffer.Dispose();
 }
 ```
-
-
-
-Before moving forward, lets create one more thing to make our lives easier. I call this the `NativeDisposer`. It will keep track of an `unmanaged IDisposable` object and make sure the data is cleaned up. We can use this to hold our buffers and keep track of their contents for us in certain situations.
-
-```csharp
-public class NativeDisposer<T> where T: unmanaged, IDisposable
-{
-    public T Object;
-
-    public static explicit operator T(NativeDisposer<T> disposer)
-    {
-        return disposer.Object;
-    }
-
-    ~NativeDisposer()
-    {
-        Object.Dispose();
-    }
-}
-```
-
-Now that we have some buffers set up, lets create a pipeline for them!
 
 ## Buffer Pipeline
 
@@ -193,33 +228,35 @@ There will also be a private utility method `EnsureBufferAllocated` that will be
 ```csharp
 public abstract class SynthProvider : MonoBehaviour
 {
-    private NativeDisposer<SynthBuffer> _buffer = new NativeDisposer<SynthBuffer>();
+    private NativeBox<SynthBuffer> _buffer;
 
-    // processes and fills a managed buffer with sound data
     public void FillBuffer(float[] buffer, int channels)
     {
-        EnsureBufferAllocated(buffer.Length, channels);
-        ProcessBuffer(ref _buffer.Object);
-        _buffer.Object.CopyTo(buffer);
+        ValidateBuffer(buffer.Length, channels);
+        ProcessBuffer(ref _buffer.Data);
+        _buffer.Data.CopyTo(buffer);
     }
-
+    
     // processes and fills a native buffer with sound data
     public void FillBuffer(ref SynthBuffer buffer)
     {
         if (!buffer.Allocated) return;
-        EnsureBufferAllocated(buffer.Length, buffer.Channels);
-        ProcessBuffer(ref _buffer.Object);
-        _buffer.Object.CopyTo(ref buffer);
+        ValidateBuffer(buffer.Length, buffer.Channels);
+        ProcessBuffer(ref _buffer.Data);
+        _buffer.Data.CopyTo(ref buffer);
     }
-
-    // ensures that our cached buffer has the same properties as the incoming buffer
-    private void EnsureBufferAllocated(int bufferLength, int channels)
+    
+    private void ValidateBuffer(int bufferLength, int channels)
     {
-        if (_buffer.Object.Length == bufferLength && _buffer.Object.Channels == channels) return;
-        if (_buffer.Object.Allocated) _buffer.Object.Dispose();
-        _buffer.Object = new SynthBuffer(bufferLength, channels);
-    }
+        if (!(_buffer is {Allocated: true})) 
+            _buffer = SynthBuffer.Construct(bufferLength, channels);
 
+        ref SynthBuffer buffer = ref _buffer.Data;
+        if (buffer.Length == bufferLength && buffer.Channels == channels) return;
+        if (buffer.Allocated) _buffer.Dispose();
+        _buffer = SynthBuffer.Construct(bufferLength, channels);
+    }
+    
     // override for creating custom providers
     protected abstract void ProcessBuffer(ref SynthBuffer buffer);
 }
