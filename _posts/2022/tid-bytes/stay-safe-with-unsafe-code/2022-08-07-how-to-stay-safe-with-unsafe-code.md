@@ -79,7 +79,7 @@ public sealed class DisposeSentinel
 }
 ```
 
-This destructor is utilized by unity to watch over and clean up the memory that it is in charge of, in case it is never disposed. It will also throw a warning that looks something like this, `A Native Collection has not been disposed, resulting in a memory leak.` It will give these warnings because having a managed object in the struct along with other safety checks can effect performance, and in builds will often be disabled. So unity encourages the developer to find and clean up these leaks themselves before release.
+A destructor is called when the garbage collector cleans up the memory for an object. This destructor is utilized by unity to watch over and clean up the memory that it is in charge of, in case it is never disposed. It will also throw a warning that looks something like this, `A Native Collection has not been disposed, resulting in a memory leak.` It will give these warnings because having a managed object in the struct along with other safety checks can effect performance, and in builds will often be disabled. So unity encourages the developer to find and clean up these leaks themselves before release.
 
 # How can we handle `unsafe` code on our own?
 
