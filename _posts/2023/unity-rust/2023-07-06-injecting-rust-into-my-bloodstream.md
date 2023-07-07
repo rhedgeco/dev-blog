@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Injecting RUST straight into my Bloodstream | Unity Native Plugins
-thumb: thumbnail.jpg
+thumb: thumbnail.png
 ---
 
 For the past 8 months, I have been completely addicted to the [`rust`](https://www.rust-lang.org) programming language. Its becoming a real issue. My wife will no longer speak to me and I've resorted to doing lines of pure oxidized metal straight off our kitchen table. But it wasn't always this way.
