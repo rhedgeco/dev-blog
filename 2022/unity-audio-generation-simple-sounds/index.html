@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>
+    
+      (Part 1) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds &middot; Ryan Hedgecock
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/assets/favicon.png">
+  <link rel="shortcut icon" href="/assets/favicon.png">
+
+  <!-- RSS -->
+  <link rel="alternate" type="application/atom+xml" title="Ryan Hedgecock" href="/atom.xml">
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8ET1Q8YNRG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-8ET1Q8YNRG');
+  </script>
+
+  <!-- Dark mode switcher -->
+  <script>
+    const initialTheme = localStorage.getItem('data-theme');
+    const rootDataset = document.documentElement.dataset;
+    rootDataset.theme = initialTheme === 'dark' || initialTheme === 'light' ? initialTheme : dark
+
+    function toggleTheme() {
+      const inDarkMode = (rootDataset.theme === 'dark');
+      reloadTheme(!inDarkMode);
+    }
+
+    function reloadTheme(darkMode) {
+      const mode = darkMode ? 'dark' : 'light';
+      rootDataset.theme = mode;
+      localStorage.setItem('data-theme', mode);
+
+      const utterancesFrame = document.getElementsByClassName('utterances-frame')[0];
+      if (utterancesFrame) {
+        utterancesFrame.contentWindow.postMessage({
+          type: 'set-theme',
+          theme: 'github-' + mode,
+        }, 'https://utteranc.es');
+      }
+    }
+
+    reloadTheme(rootDataset.theme === 'dark');
+  </script>
+</head>
+
+
+<body>
+<header class="masthead">
+    <div class="flex-row-between">
+        <h3 class="masthead-title">
+            <a href="/" title="Home">Ryan Hedgecock</a>
+            <small>Dev Blog</small>
+        </h3>
+        <button title="Change Theme" class="theme-toggle" onclick="toggleTheme()">
+            <i class="material-icons light-mode-icon">light_mode</i>
+            <i class="material-icons dark-mode-icon">dark_mode</i>
+        </button>
+    </div>
+</header>
+<div class="container content">
+    <main>
+        <article class="post">
+  
+  <img src="thumbnail.jpg" alt="(Part 1) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds">
+  
+  <h1 class="post-title">(Part 1) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds</h1>
+  <time datetime="2022-06-21T00:00:00+00:00" class="post-date">21 Jun 2022</time>
+  <h1>Table of Contents</h1>
+
+<ul>
+  <li><a href="/2022/unity-audio-generation-fundamentals/#introduction">🔗 <strong>Introduction</strong></a></li>
+  <li><a href="/2022/unity-audio-generation-fundamentals/#fundamentals">🔗 <strong>(Part 0) Fundamentals</strong></a></li>
+  <li><a href="#creating-simple-sounds">🟢 <strong>(Part 1) Creating Simple Sounds</strong></a>
+    <ul>
+      <li><a href="#project-setup">Project Setup</a></li>
+      <li><a href="#hooking-into-the-sound-engine">Hooking into the sound engine</a></li>
+      <li><a href="#creating-your-first-synth">Creating your first Synth</a></li>
+    </ul>
+  </li>
+  <li><a href="/2022/unity-audio-generation-performance#performance-and-architecture">🔗 <strong>(Part 2) Performance and Architecture</strong></a></li>
+</ul>
+
+<h1 id="creating-simple-sounds">Creating Simple Sounds</h1>
+<p>In this post we will cover getting a project set up and start laying down the groundwork for generating sound in the Unity Engine. The previous post covered a basic understanding of what digital sound is, and also provided some insight into the vocabulary we will be referencing. If you have never dealt with digital sound manipulation before, it may be worth your time to <a href="/2022/unity-audio-generation-fundamentals">go back and take a look</a>.</p>
+
+<h2 id="project-setup">Project Setup</h2>
+<p>Create a new Unity project. The editor used in this post is version <strong>2020.3.19f1</strong>. I will be calling this project <strong>Synthic</strong> because I thought the name sounded cool. <em>(I will also be using the ‘synth’ verbiage in a lot of my classes too)</em></p>
+
+<p>Unity comes with a BUNCH of preinstalled packages in the <a href="https://docs.unity3d.com/Packages/com.unity.package-manager-ui@1.8/manual/index.html">package manager</a>. For the sake of keeping things clean, we will remove pretty much all of them, and only add ones we know we will need right now.</p>
+
+<p><img src="package-manager.png" alt="Package manager example" /></p>
+
+<p>One big thing that we need to install is the <a href="https://docs.unity3d.com/Packages/com.unity.burst@0.2-preview.20/"><strong>Unity Burst Compiler</strong></a>. The burst compiler is some voodoo magic that takes standard C# IL/.NET bytecode and compiles it down to <em>REALLY</em> fast native code. We will be using this heavily to generate sounds because performance is <em>critical</em> when generating sounds at runtime.</p>
+
+<p>The only other package I have is one for my specific <abbr data-title="Integrated Development Environment">IDE</abbr>, which happens to be <a href="https://www.jetbrains.com/rider/">JetBrains Rider</a>. You dont <em>need</em> to use this IDE, but it’s my IDE of choice.</p>
+
+<p>With our editor up and running, lets start hooking into the sound engine.</p>
+
+<h2 id="hooking-into-the-sound-engine">Hooking into the sound engine</h2>
+<p>Unity’s MonoBehaviour allows for a method called <code class="language-plaintext highlighter-rouge">OnAudioFilterRead</code>. This is usually used to process incoming audio, but nothing is stopping us from <em>creating</em> audio in the first place. The only requirement is that we have an empty <a href="https://docs.unity3d.com/Manual/class-AudioSource.html"><code class="language-plaintext highlighter-rouge">AudioSource</code></a> component on our game object as well.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">class</span> <span class="nc">AudioGenerator</span> <span class="p">:</span> <span class="n">MonoBehaviour</span>
+<span class="p">{</span>
+    <span class="k">private</span> <span class="k">void</span> <span class="nf">OnAudioFilterRead</span><span class="p">(</span><span class="kt">float</span><span class="p">[]</span> <span class="n">data</span><span class="p">,</span> <span class="kt">int</span> <span class="n">channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="c1">// sound generation logic goes here</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">float</code> array is what we call an audio buffer. This contains the samples for the next section of audio playing in Unity’s sound engine. This should currently be set to have <strong>2048</strong> samples. This is because, by default, unity’s buffer length is 1024, and there are 2 audio channels <em>(one for left and right)</em>.</p>
+
+<p>The order of the data when in 2 channel mode is an interleaving of the samples as a left right repeating pattern <em>(other modes follow a similar paradigm just with more channels)</em>:</p>
+
+<p><img src="interleaving.jpg" alt="interleaving channels" /></p>
+
+<p>Now that we have an entry point into the sound engine, and understand the data layout, let’s build a simple synth to get us started.</p>
+
+<h2 id="creating-your-first-synth">Creating your first Synth</h2>
+
+<p>First we need to make a new script. I’m calling mine <code class="language-plaintext highlighter-rouge">SimpleSineGenerator</code> as we will be generating a single sine wave with it. For this first generator, we are not going to set up an architecture yet, or worry about performance. This will simply be an introduction into how a generator may be constructed.</p>
+
+<p>There are a few parameters we could expose in the inspector. We will use <code class="language-plaintext highlighter-rouge">frequency</code> and <code class="language-plaintext highlighter-rouge">amplitude</code> for this example. Here is what our class should look like right now:</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">class</span> <span class="nc">SimpleSineGenerator</span> <span class="p">:</span> <span class="n">MonoBehaviour</span>
+<span class="p">{</span>
+    <span class="p">[</span><span class="n">SerializeField</span><span class="p">,</span> <span class="nf">Range</span><span class="p">(</span><span class="m">0</span><span class="p">,</span> <span class="m">1</span><span class="p">)]</span> <span class="k">private</span> <span class="kt">float</span> <span class="n">amplitude</span> <span class="p">=</span> <span class="m">0.5f</span><span class="p">;</span>
+    <span class="p">[</span><span class="n">SerializeField</span><span class="p">]</span> <span class="k">private</span> <span class="kt">float</span> <span class="n">frequency</span> <span class="p">=</span> <span class="m">261.62f</span><span class="p">;</span> <span class="c1">// middle C</span>
+
+    <span class="k">private</span> <span class="k">void</span> <span class="nf">OnAudioFilterRead</span><span class="p">(</span><span class="kt">float</span><span class="p">[]</span> <span class="n">data</span><span class="p">,</span> <span class="kt">int</span> <span class="n">channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="c1">// TODO: Generate Sine Wave</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>As we generate audio, we will need to keep track of where in the wave we currently are. To do this, let’s create a <code class="language-plaintext highlighter-rouge">private double</code> to track of the current <em>phase</em><sup id="fnref:fn-phase" role="doc-noteref"><a href="#fn:fn-phase" class="footnote" rel="footnote">1</a></sup> of our wave.</p>
+
+<p>We also need to keep track of the current <em>Sampling Rate</em>. We will grab this in the <code class="language-plaintext highlighter-rouge">Awake</code> method and, for now, just assume it doesn’t change.</p>
+
+<p>Add these variables to the class where you like:</p>
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">private</span> <span class="kt">double</span> <span class="n">_phase</span><span class="p">;</span>
+<span class="k">private</span> <span class="kt">int</span> <span class="n">_sampleRate</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Now lets get to the meat of the generation. We will start calculating how much the phase should change after each sample iteration. Then we will proceed to loop over each sample in the buffer to calculate its wave value.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">private</span> <span class="k">void</span> <span class="nf">OnAudioFilterRead</span><span class="p">(</span><span class="kt">float</span><span class="p">[]</span> <span class="n">data</span><span class="p">,</span> <span class="kt">int</span> <span class="n">channels</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="c1">// calculate how much the phase should change after each sample</span>
+    <span class="kt">double</span> <span class="n">phaseIncrement</span> <span class="p">=</span> <span class="n">frequency</span> <span class="p">/</span> <span class="n">_sampleRate</span><span class="p">;</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">sample</span> <span class="p">=</span> <span class="m">0</span><span class="p">;</span> <span class="n">sample</span> <span class="p">&lt;</span> <span class="n">data</span><span class="p">.</span><span class="n">Length</span><span class="p">;</span> <span class="n">sample</span> <span class="p">+=</span> <span class="n">channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="c1">// TODO: operate on samples</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>While looping over the samples we need to do the following:</p>
+<ol>
+  <li>calculate the value for the current phase of the sine wave</li>
+  <li>increment the phase value for the next iteration</li>
+  <li>populate all the audio channels with the current wave value</li>
+</ol>
+
+<p>Here is the logic I added to my loop:</p>
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">sample</span> <span class="p">=</span> <span class="m">0</span><span class="p">;</span> <span class="n">sample</span> <span class="p">&lt;</span> <span class="n">data</span><span class="p">.</span><span class="n">Length</span><span class="p">;</span> <span class="n">sample</span> <span class="p">+=</span> <span class="n">channels</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="c1">// get value of phase on a sine wave</span>
+    <span class="kt">float</span> <span class="k">value</span> <span class="p">=</span> <span class="n">Mathf</span><span class="p">.</span><span class="nf">Sin</span><span class="p">((</span><span class="kt">float</span><span class="p">)</span> <span class="n">_phase</span> <span class="p">*</span> <span class="m">2</span> <span class="p">*</span> <span class="n">Mathf</span><span class="p">.</span><span class="n">PI</span><span class="p">)</span> <span class="p">*</span> <span class="n">amplitude</span><span class="p">;</span>
+    
+    <span class="c1">// increment _phase value for next iteration</span>
+    <span class="n">_phase</span> <span class="p">=</span> <span class="p">(</span><span class="n">_phase</span> <span class="p">+</span> <span class="n">phaseIncrement</span><span class="p">)</span> <span class="p">%</span> <span class="m">1</span><span class="p">;</span>
+
+    <span class="c1">// populate all channels with the values</span>
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">channel</span> <span class="p">=</span> <span class="m">0</span><span class="p">;</span> <span class="n">channel</span> <span class="p">&lt;</span> <span class="n">channels</span><span class="p">;</span> <span class="n">channel</span><span class="p">++)</span>
+    <span class="p">{</span>
+        <span class="n">data</span><span class="p">[</span><span class="n">sample</span> <span class="p">+</span> <span class="n">channel</span><span class="p">]</span> <span class="p">=</span> <span class="k">value</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>With all that completed, make sure you apply this component with an empty audio source onto a game object, and hit play!</p>
+
+<p>You should hear a middle C sine wave! <em>(assuming you haven’t changed the frequency)</em></p>
+
+<p>It should sound like this:</p>
+
+<audio controls="">
+    <source src="sine.wav" type="audio/mpeg" />
+    Your browser does not support the audio element.
+</audio>
+
+<p><strong>Next Section → <a href="/2022/unity-audio-generation-performance/#performanxe-and-architecture">Performance and Architecture</a></strong></p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:fn-phase" role="doc-endnote">
+      <p><strong><em>Phase</em></strong> is the current position within one cycle of a wave. <a href="https://en.wikipedia.org/wiki/Phase_(waves)">See Wikipedia Definition</a> <br /> For simplicity we use a value between 0 and 1, but this is also commonly between 0 and 2π. <a href="#fnref:fn-phase" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+</article>
+
+<hr>
+<div id="github-thread"></div>
+<script>
+(() => {
+    let utterances = document.createElement('script');
+    utterances.setAttribute('src', 'https://utteranc.es/client.js');
+    utterances.setAttribute('repo', 'rhedgeco/rhedgeco-blog');
+    utterances.setAttribute('issue-term', 'title');
+    utterances.setAttribute('label', 'blog chat 💬');
+    utterances.setAttribute('crossorigin', 'anonymous');
+    utterances.setAttribute('async', '');
+
+    let utterancesTheme = document.documentElement.dataset.theme === 'dark' ? 'github-dark' : 'github-light';
+    utterances.setAttribute('theme', utterancesTheme);
+
+    document.getElementById('github-thread').replaceWith(utterances);
+})();
+</script>
+<noscript>Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.</noscript>
+
+    </main>
+    <btn id="scroll-btn" onclick="topFunction()">Back to Top ☝</btn>
+<script>
+    scrollBtn = document.getElementById("scroll-btn");
+
+    // When the user scrolls down 20px from the top of the document, show the button
+    window.onscroll = function() {scrollFunction()};
+    window.onload = function () {scrollFunction()};
+
+    function scrollFunction() {
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+            scrollBtn.style.display = "block";
+        } else {
+            scrollBtn.style.display = "none";
+        }
+    }
+
+    // When the user clicks on the button, scroll to the top of the document
+    function topFunction() {
+        document.body.scrollTop = 0; // For Safari
+        document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+    }
+</script>
+    <hr>
+    <footer class="footer">
+        <small>
+            &copy;
+            <time datetime="2023-07-07T04:48:16+00:00">2023</time>
+            Ryan Hedgecock. All rights reserved.
+        </small>
+    </footer>
+</div>
+
+</body>
+</html>

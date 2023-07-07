@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>
+    
+      Injecting RUST straight into my Bloodstream | Unity Native Plugins &middot; Ryan Hedgecock
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/assets/favicon.png">
+  <link rel="shortcut icon" href="/assets/favicon.png">
+
+  <!-- RSS -->
+  <link rel="alternate" type="application/atom+xml" title="Ryan Hedgecock" href="/atom.xml">
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8ET1Q8YNRG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-8ET1Q8YNRG');
+  </script>
+
+  <!-- Dark mode switcher -->
+  <script>
+    const initialTheme = localStorage.getItem('data-theme');
+    const rootDataset = document.documentElement.dataset;
+    rootDataset.theme = initialTheme === 'dark' || initialTheme === 'light' ? initialTheme : dark
+
+    function toggleTheme() {
+      const inDarkMode = (rootDataset.theme === 'dark');
+      reloadTheme(!inDarkMode);
+    }
+
+    function reloadTheme(darkMode) {
+      const mode = darkMode ? 'dark' : 'light';
+      rootDataset.theme = mode;
+      localStorage.setItem('data-theme', mode);
+
+      const utterancesFrame = document.getElementsByClassName('utterances-frame')[0];
+      if (utterancesFrame) {
+        utterancesFrame.contentWindow.postMessage({
+          type: 'set-theme',
+          theme: 'github-' + mode,
+        }, 'https://utteranc.es');
+      }
+    }
+
+    reloadTheme(rootDataset.theme === 'dark');
+  </script>
+</head>
+
+
+<body>
+<header class="masthead">
+    <div class="flex-row-between">
+        <h3 class="masthead-title">
+            <a href="/" title="Home">Ryan Hedgecock</a>
+            <small>Dev Blog</small>
+        </h3>
+        <button title="Change Theme" class="theme-toggle" onclick="toggleTheme()">
+            <i class="material-icons light-mode-icon">light_mode</i>
+            <i class="material-icons dark-mode-icon">dark_mode</i>
+        </button>
+    </div>
+</header>
+<div class="container content">
+    <main>
+        <article class="post">
+  
+  <img src="thumbnail.png" alt="Injecting RUST straight into my Bloodstream | Unity Native Plugins">
+  
+  <h1 class="post-title">Injecting RUST straight into my Bloodstream | Unity Native Plugins</h1>
+  <time datetime="2023-07-06T00:00:00+00:00" class="post-date">06 Jul 2023</time>
+  <p>For the past 8 months, I have been completely addicted to the <a href="https://www.rust-lang.org"><code class="language-plaintext highlighter-rouge">rust</code></a> programming language. Its becoming a real issue. My wife will no longer speak to me and I’ve resorted to doing lines of pure oxidized metal straight off our kitchen table. But it wasn’t always this way.</p>
+
+<h2 id="how-did-my-rust-addiction-start">How did my <code class="language-plaintext highlighter-rouge">rust</code> addiction start?</h2>
+
+<p>Well… it all started 8 months ago. I heard of this fancy new language that promised so much: compile time memory-safety, blazingly fast code, and cute little crabs 🦀. I, being a unity developer, found it difficult to get into the language. After all, how do I use it in the unity engine? And what the heck is this dark magic called the <a href="https://doc.rust-lang.org/1.8.0/book/references-and-borrowing.html">b̵̡͑͑̍ŏ̷͉ŕ̷̹̲̩̽r̶̻̼͂͋͒o̶͙̬̽ẃ̶͉͙͠ ̶͇͎͖͠c̵̛͉̦̆̄h̴̤͚͋̿e̴̤̊̂̌ͅc̵̣̈k̸̻̣̻̓e̵̡͔͌̿r̶̘̿̒̔?</a></p>
+
+<p>I was nervous. But my curiosity was certainly peaked as I love the draw of squeezing more performance out of my code. This was exactly the kind or pressure I needed to cave. So the next step was my trek into the world of <a href="https://docs.unity3d.com/Manual/NativePlugins.html">Native Plugins</a>.</p>
+
+<h2 id="what-are-native-plugins">What are Native Plugins?</h2>
+
+<p>Native Plugins are Unity’s way of using libraries of native code you can write in languages such as C, C++, and Objective-C. At least according to <a href="https://docs.unity3d.com/Manual/NativePlugins.html">their website</a>. But what they really mean, is you can run any native library as long as it has a <strong>C-style</strong> interface. And come to find out, <code class="language-plaintext highlighter-rouge">rust</code> has just the tools to be able to so.</p>
+
+<h2 id="my-first-dab-of-rust">My first dab of <code class="language-plaintext highlighter-rouge">rust</code></h2>
+
+<p>Young and naive, I installed the tools to get a rust project up and running. I made a rust project using <a href="https://doc.rust-lang.org/cargo/"><code class="language-plaintext highlighter-rouge">cargo</code></a> put together this little snippet and built my first rust function! (<a href="https://github.com/rhedgeco/UnityRustNative/tree/main/RustNative/NewRustNativeProject">see here for what the whole project structure looks like</a>)</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">#[no_mangle]</span>
+<span class="cd">/// Returns the integer `x` incremented by 1</span>
+<span class="k">pub</span> <span class="k">extern</span> <span class="s">"C"</span> <span class="k">fn</span> <span class="nf">add_one</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">u32</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">u32</span> <span class="p">{</span>
+    <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>To get the ball rolling, I created a function called <code class="language-plaintext highlighter-rouge">add_one</code> that takes in an unsigned 32 bit integer (<code class="language-plaintext highlighter-rouge">u32</code>) and adds one to it. A simple function to be sure, but I’m only a rust fledgling here. The <code class="language-plaintext highlighter-rouge">extern "C"</code> part of the signature specifies to export this function with a <strong>C-style</strong> interface that can be called from outside our library. Lastly, I added a <code class="language-plaintext highlighter-rouge">#[no_mangle]</code> attribute above the function to tell the compiler essentially hey don’t mess up my boy up too much so that he still can be identified by other programs alright?</p>
+
+<p>All that was left was to shove my beautiful little library into the Unity Engine.</p>
+
+<h2 id="ham-fisting-a-rust-library-into-the-unity-engine">Ham-fisting a <code class="language-plaintext highlighter-rouge">rust</code> library into the Unity Engine</h2>
+
+<p>Now just because Unity will let you shove a precompiled library into its innards, doesn’t mean its going to like it. First I had to copy the <code class="language-plaintext highlighter-rouge">libNewRustNativeProject.so</code> file (<code class="language-plaintext highlighter-rouge">*.dll</code> if you are on Windows) into my unity assets folder. But Unity can’t talk to it yet.</p>
+
+<p>We will need to create a translator of sorts. I created a new <code class="language-plaintext highlighter-rouge">C#</code> file called <code class="language-plaintext highlighter-rouge">NewRustNativeProject.cs</code> and put the following:</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">static</span> <span class="k">partial</span> <span class="k">class</span> <span class="nc">NewRustNativeProject</span>
+<span class="p">{</span>
+    <span class="k">public</span> <span class="k">const</span> <span class="kt">string</span> <span class="n">NativeLib</span> <span class="p">=</span> <span class="s">"NewRustNativeProject"</span><span class="p">;</span>
+
+    <span class="p">[</span><span class="nf">DllImport</span><span class="p">(</span><span class="n">NativeLib</span><span class="p">,</span> <span class="n">CallingConvention</span> <span class="p">=</span> <span class="n">CallingConvention</span><span class="p">.</span><span class="n">Cdecl</span><span class="p">,</span> <span class="n">EntryPoint</span> <span class="p">=</span> <span class="s">"add_one"</span><span class="p">)]</span>
+    <span class="k">public</span> <span class="k">static</span> <span class="k">extern</span> <span class="kt">uint</span> <span class="nf">add_one</span><span class="p">(</span><span class="kt">uint</span> <span class="n">x</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">DllImport</code> attribute tells unity how to talk to the rust library. First its given the name for the library, which is <code class="language-plaintext highlighter-rouge">NewRustNativeProject</code> and told the entry point which was <code class="language-plaintext highlighter-rouge">add_one</code>. The method is named the same here, but it can be named whatever you want.</p>
+
+<p>I was now able to call the library from anwhere in the Unity project. I created a little script, added <code class="language-plaintext highlighter-rouge">Debug.Log(NewRustNativeProject.add_one(1));</code> somewhere inside, and voila!</p>
+
+<p><img src="unity-output.png" alt="Unity Console Output - 2" /></p>
+
+<p>That was it. That was the dopamine hit I needed. After that, my world would never be the same.</p>
+
+<h2 id="a-spiral-into-madness">A spiral into <strong>MADNESS</strong></h2>
+
+<p>Now that I was hooked I dove into the <a href="https://doc.rust-lang.org/book/">Rust Book</a>, watched tutorial after tutorial, read blog after blog. And here I am 8 months later. I’ve made a number of rust libraries. I’ve been cheating on unity by building my <a href="https://github.com/rhedgeco/boba">own engine</a> from scratch in <code class="language-plaintext highlighter-rouge">rust</code>. And I’ve also been cheating on my wife… by building my own engine from scratch in <code class="language-plaintext highlighter-rouge">rust</code>. Every second of every day… is <code class="language-plaintext highlighter-rouge">RUST</code>.</p>
+
+<p>Now that I’m completely entrenched in that sticky rust mucus, I have returned to shine a path for those that come after. The world of <code class="language-plaintext highlighter-rouge">rust</code> is glorious, and Unity plugins are a <strong>GREAT</strong> gateway drug into the insanity.</p>
+
+<h2 id="injecting-rust-straight-into-my-bloodstream">Injecting <strong><code class="language-plaintext highlighter-rouge">RUST</code></strong> straight into my Bloodstream</h2>
+
+<p>Coming back to Unity after some time I wanted it to be easier to OD on <code class="language-plaintext highlighter-rouge">rust</code>. I have <a href="https://github.com/rhedgeco/UnityRustNative/releases/latest">built a tool</a> for more easily creating plugins for the engine that covers the main pain points I ran into in the beginning.</p>
+
+<p>First off, for any libraries larger than a single function, creating all those translation layers takes quite some time. But thats not the worst of it.</p>
+
+<p>One of the first issues that I ran into when making native plugins was that once loaded, they <em>COULD NOT</em> be unloaded. This meant that I had to restart the unity editor every time I made a change to the rust code which for anyone that ever used Unity… knows thats a pain in the ass.</p>
+
+<p>The package I created to ease these pains can be <a href="https://github.com/rhedgeco/UnityRustNative/releases/latest">downloaded here</a>. Once installed in your project, in the top menu click <strong>Window &gt; Rust Native Manager</strong>. This will open a custom window for creating and managing rust libraries.</p>
+
+<p><img src="rust-native-manager.png" alt="Rust Native Manager" /></p>
+
+<p>Make sure to set the <code class="language-plaintext highlighter-rouge">cargo</code> location, and then  create a new project and pick a name. I already had one created there, but a fresh install should show no projects in that dark top area.</p>
+
+<p>After creating a new project, in the unity project folder but outside the <code class="language-plaintext highlighter-rouge">Assets</code> folder should be a new folder named <code class="language-plaintext highlighter-rouge">RustNative</code>. Inside there will be the fresh <code class="language-plaintext highlighter-rouge">rust</code> project you created, all rip roaring and ready to go with the example code set up that I showed above.</p>
+
+<p>I use the library <a href="https://github.com/ralfbiedert/interoptopus"><code class="language-plaintext highlighter-rouge">interoptopus</code></a> to generate the <code class="language-plaintext highlighter-rouge">C#</code> bindings in the <code class="language-plaintext highlighter-rouge">bind.rs</code> file within <code class="language-plaintext highlighter-rouge">src</code>. And the <code class="language-plaintext highlighter-rouge">bindings.rs</code> file in the <code class="language-plaintext highlighter-rouge">tests</code> directory to handle the binding generation. Take a look at the <a href="https://docs.rs/interoptopus/latest/interoptopus/"><code class="language-plaintext highlighter-rouge">interoptopus docs</code></a> for more on how to use the binding generator.</p>
+
+<p>Lastly, whenever you change the rust code, click the <code class="language-plaintext highlighter-rouge">Reload Bindings</code> button next to your project and Unity will generate a new library with a unique ID and load it. This should allow you to make changes to your rust library without having to constantly close and reopen the editor.</p>
+
+<h2 id="closing-remarks">Closing Remarks</h2>
+
+<p>Hopefully this has served as a good beginning guide on how to most effectivelty develop a crippling <code class="language-plaintext highlighter-rouge">rust</code> addiction. While I can’t speak for those in my life that care about me, I am in pure bliss using this language and I know you will be too. Stay safe and have fun! I’ll catch you next time 👋</p>
+
+</article>
+
+<hr>
+<div id="github-thread"></div>
+<script>
+(() => {
+    let utterances = document.createElement('script');
+    utterances.setAttribute('src', 'https://utteranc.es/client.js');
+    utterances.setAttribute('repo', 'rhedgeco/rhedgeco-blog');
+    utterances.setAttribute('issue-term', 'title');
+    utterances.setAttribute('label', 'blog chat 💬');
+    utterances.setAttribute('crossorigin', 'anonymous');
+    utterances.setAttribute('async', '');
+
+    let utterancesTheme = document.documentElement.dataset.theme === 'dark' ? 'github-dark' : 'github-light';
+    utterances.setAttribute('theme', utterancesTheme);
+
+    document.getElementById('github-thread').replaceWith(utterances);
+})();
+</script>
+<noscript>Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.</noscript>
+
+    </main>
+    <btn id="scroll-btn" onclick="topFunction()">Back to Top ☝</btn>
+<script>
+    scrollBtn = document.getElementById("scroll-btn");
+
+    // When the user scrolls down 20px from the top of the document, show the button
+    window.onscroll = function() {scrollFunction()};
+    window.onload = function () {scrollFunction()};
+
+    function scrollFunction() {
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+            scrollBtn.style.display = "block";
+        } else {
+            scrollBtn.style.display = "none";
+        }
+    }
+
+    // When the user clicks on the button, scroll to the top of the document
+    function topFunction() {
+        document.body.scrollTop = 0; // For Safari
+        document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+    }
+</script>
+    <hr>
+    <footer class="footer">
+        <small>
+            &copy;
+            <time datetime="2023-07-07T04:48:16+00:00">2023</time>
+            Ryan Hedgecock. All rights reserved.
+        </small>
+    </footer>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>
+    
+      (Part 0) Runtime Audio Generation in the Unity Engine - Fundamentals &middot; Ryan Hedgecock
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/assets/favicon.png">
+  <link rel="shortcut icon" href="/assets/favicon.png">
+
+  <!-- RSS -->
+  <link rel="alternate" type="application/atom+xml" title="Ryan Hedgecock" href="/atom.xml">
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8ET1Q8YNRG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-8ET1Q8YNRG');
+  </script>
+
+  <!-- Dark mode switcher -->
+  <script>
+    const initialTheme = localStorage.getItem('data-theme');
+    const rootDataset = document.documentElement.dataset;
+    rootDataset.theme = initialTheme === 'dark' || initialTheme === 'light' ? initialTheme : dark
+
+    function toggleTheme() {
+      const inDarkMode = (rootDataset.theme === 'dark');
+      reloadTheme(!inDarkMode);
+    }
+
+    function reloadTheme(darkMode) {
+      const mode = darkMode ? 'dark' : 'light';
+      rootDataset.theme = mode;
+      localStorage.setItem('data-theme', mode);
+
+      const utterancesFrame = document.getElementsByClassName('utterances-frame')[0];
+      if (utterancesFrame) {
+        utterancesFrame.contentWindow.postMessage({
+          type: 'set-theme',
+          theme: 'github-' + mode,
+        }, 'https://utteranc.es');
+      }
+    }
+
+    reloadTheme(rootDataset.theme === 'dark');
+  </script>
+</head>
+
+
+<body>
+<header class="masthead">
+    <div class="flex-row-between">
+        <h3 class="masthead-title">
+            <a href="/" title="Home">Ryan Hedgecock</a>
+            <small>Dev Blog</small>
+        </h3>
+        <button title="Change Theme" class="theme-toggle" onclick="toggleTheme()">
+            <i class="material-icons light-mode-icon">light_mode</i>
+            <i class="material-icons dark-mode-icon">dark_mode</i>
+        </button>
+    </div>
+</header>
+<div class="container content">
+    <main>
+        <article class="post">
+  
+  <img src="thumbnail.jpg" alt="(Part 0) Runtime Audio Generation in the Unity Engine - Fundamentals">
+  
+  <h1 class="post-title">(Part 0) Runtime Audio Generation in the Unity Engine - Fundamentals</h1>
+  <time datetime="2022-06-03T00:00:00+00:00" class="post-date">03 Jun 2022</time>
+  <h1>Table of Contents</h1>
+
+<ul>
+  <li><a href="#introduction">🟢 <strong>Introduction</strong></a></li>
+  <li><a href="#fundamentals">🟢 <strong>(Part 0) Fundamentals</strong></a>
+    <ul>
+      <li><a href="#how-is-sound-made">How is sound made?</a></li>
+      <li><a href="#understanding-digital-waves">Understanding Digital Waves</a></li>
+      <li><a href="#creating-digital-signals">Creating digital signals</a>
+        <ul>
+          <li><a href="#oscillators">Oscillators</a></li>
+          <li><a href="#filters">Filters</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds">🔗 <strong>(Part 1) Creating Simple Sounds</strong></a></li>
+  <li><a href="/2022/unity-audio-generation-performance#performance-and-architecture">🔗 <strong>(Part 2) Performance and Architecture</strong></a></li>
+</ul>
+
+<h1 id="introduction">Introduction</h1>
+<p>In this series we will explore how sound is created digitally, and how we can take control of those processes ourselves. We will begin with some fundamentals, but the meat of this will be creating an efficient system for generating sound at runtime in C# using the Unity Engine.</p>
+
+<p>While we will spend a lot of time writing code for the Unity Engine specifically, the fundamentals and design choices will still hold for any other engine or language. So strap in, and let’s get started!</p>
+
+<hr />
+
+<h1 id="fundamentals">Fundamentals</h1>
+<h2 id="how-is-sound-made">How is sound made?</h2>
+<p>While listening to music, you are able to hear many parts: guitar, drums, piano, vocals, etc. But the crazy part is that all of that information is encoded into a single wave. That is because it’s also exactly how we hear sound.</p>
+
+<p><em>Sound is just a pressure wave in the air, and when it happens at the right speeds, we hear sound.</em></p>
+
+<p>When a band is playing on stage, and you are in the crowd, all the instruments are vibrating and creating pressure waves in the air. But <em>most people</em> only have 2 ears, so how are you hearing more than 2 things at once?</p>
+
+<p>We can think of the air in this situation, like the surface of the water in a pool. There can be many people splashing in the pool making waves at the same time. But at any given point in the pool, the water level is the combination of all those waves converging to form one complex pseudo-random wave.</p>
+
+<p>The same thing happens in the air with the musical instruments. All the sound waves converge to make one big complex wave the moment it hits your eardrum. The crazy part is that our brains have adapted to decode this information really well, allowing us to enjoy an entire symphony of music!</p>
+
+<h2 id="understanding-digital-waves">Understanding Digital Waves</h2>
+<p>While sound in the physical world is made up of waves, sound in the digital world is represented as a series of values <em>(aka. samples)</em> between <strong>-1</strong> and <strong>1</strong> that tell the speaker cone where to be at a given point in time. How many points there are within a 1-second period of time is called the <strong>Sampling Rate</strong>. And the speaker cone moving back and forth does its best to recreate the exact sound waves you would hear in the physical world.</p>
+
+<p><em>One of the more common sampling rates is <strong>44100 samples per second (44.1kHz). THATS A LOT OF SAMPLES</strong></em> 😮</p>
+
+<p>One of the reason so many samples are used, is to provide enough data so that it doesn’t <em><ins>actually sound</ins></em> like there are any samples. Sampling rates were first discussed quite some time ago. <em>(the 1940s to be exact)</em> As part of the <strong>Nyquist-Shannon theorem</strong> it states that a sampling rate must have twice the frequency of the original recording in order to be faithfully reproduced.</p>
+
+<p>We know that the human ear can hear frequencies approximately between <strong>20 hertz (20Hz)</strong> and <strong>20 kilohertz (20kHz)</strong>. This means that 44.1kHz is plenty over double the range of human ear’s maximum frequency.</p>
+
+<p>There are other reasons for the numbers that are chosen, but for our case it doesn’t matter too much. With all the jargon and history aside, what you end up with is a series of points that represent a waveform for your speakers to produce like this:</p>
+
+<p><img src="sin-wave.png" alt="Sin Wave" />
+All those singers, guitars, and drums are encoded into this single stream of values.</p>
+
+<h2 id="creating-digital-signals">Creating digital signals</h2>
+<p>Now that we know what digital waves are made up of, how can we craft them ourselves from nothing? There are many methods at which digital signals are generated and processed. In this section however, we will mainly cover <strong>Oscillators</strong> and <strong>Filters</strong> as these are the main ways that we will be generating sounds in the Unity Engine.</p>
+
+<h3 id="oscillators">Oscillators</h3>
+<p><img src="oscillator.jpg" alt="Oscillator" /></p>
+
+<p>Seen above is an industry standard audio synthesizer called Serum. Highlighted are two of its <strong>Oscillators</strong> with different <strong>Wave Shapes</strong>.</p>
+
+<p>Oscillators take a wave shape, and repeat the wave at a specified number of times per second <em>(aka its frequency)</em> to create the sound of whatever note should be played. The wave shapes can be swapped out and changed over time to create many advanced sounds.</p>
+
+<p>Oscillators are used in a form of synthesis called <strong>Additive Synthesis</strong>. In a nutshell this means that sound is created by adding various different frequencies of wave shapes together. Multiple oscillators are usually used together to create unique sound.</p>
+
+<h3 id="filters">Filters</h3>
+<p>While oscillators produce unique wave sounds, filters process incoming waves to modify the way a waveform sounds.</p>
+
+<p>These are more general and can take many forms. They can do anything from audio equalizing or adding reverb, to completely changing the shape and wave of the overall sound.</p>
+
+<p><sub>parametric equalizer and reverb in FL Studio</sub>
+<img src="filters.png" alt="Filters" /></p>
+
+<p>Multiple signals can be processed together to create unique sounds, and filters could even contain their own oscillators! These will usually make up the bulk of shaping how a sound is made.</p>
+
+<p><strong>Next Section → <a href="/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds">Creating Simple Sounds</a></strong></p>
+
+</article>
+
+<hr>
+<div id="github-thread"></div>
+<script>
+(() => {
+    let utterances = document.createElement('script');
+    utterances.setAttribute('src', 'https://utteranc.es/client.js');
+    utterances.setAttribute('repo', 'rhedgeco/rhedgeco-blog');
+    utterances.setAttribute('issue-term', 'title');
+    utterances.setAttribute('label', 'blog chat 💬');
+    utterances.setAttribute('crossorigin', 'anonymous');
+    utterances.setAttribute('async', '');
+
+    let utterancesTheme = document.documentElement.dataset.theme === 'dark' ? 'github-dark' : 'github-light';
+    utterances.setAttribute('theme', utterancesTheme);
+
+    document.getElementById('github-thread').replaceWith(utterances);
+})();
+</script>
+<noscript>Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.</noscript>
+
+    </main>
+    <btn id="scroll-btn" onclick="topFunction()">Back to Top ☝</btn>
+<script>
+    scrollBtn = document.getElementById("scroll-btn");
+
+    // When the user scrolls down 20px from the top of the document, show the button
+    window.onscroll = function() {scrollFunction()};
+    window.onload = function () {scrollFunction()};
+
+    function scrollFunction() {
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+            scrollBtn.style.display = "block";
+        } else {
+            scrollBtn.style.display = "none";
+        }
+    }
+
+    // When the user clicks on the button, scroll to the top of the document
+    function topFunction() {
+        document.body.scrollTop = 0; // For Safari
+        document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+    }
+</script>
+    <hr>
+    <footer class="footer">
+        <small>
+            &copy;
+            <time datetime="2023-07-07T04:48:16+00:00">2023</time>
+            Ryan Hedgecock. All rights reserved.
+        </small>
+    </footer>
+</div>
+
+</body>
+</html>

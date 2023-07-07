@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>
+    
+      404: Page not found &middot; Ryan Hedgecock
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/assets/favicon.png">
+  <link rel="shortcut icon" href="/assets/favicon.png">
+
+  <!-- RSS -->
+  <link rel="alternate" type="application/atom+xml" title="Ryan Hedgecock" href="/atom.xml">
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8ET1Q8YNRG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-8ET1Q8YNRG');
+  </script>
+
+  <!-- Dark mode switcher -->
+  <script>
+    const initialTheme = localStorage.getItem('data-theme');
+    const rootDataset = document.documentElement.dataset;
+    rootDataset.theme = initialTheme === 'dark' || initialTheme === 'light' ? initialTheme : dark
+
+    function toggleTheme() {
+      const inDarkMode = (rootDataset.theme === 'dark');
+      reloadTheme(!inDarkMode);
+    }
+
+    function reloadTheme(darkMode) {
+      const mode = darkMode ? 'dark' : 'light';
+      rootDataset.theme = mode;
+      localStorage.setItem('data-theme', mode);
+
+      const utterancesFrame = document.getElementsByClassName('utterances-frame')[0];
+      if (utterancesFrame) {
+        utterancesFrame.contentWindow.postMessage({
+          type: 'set-theme',
+          theme: 'github-' + mode,
+        }, 'https://utteranc.es');
+      }
+    }
+
+    reloadTheme(rootDataset.theme === 'dark');
+  </script>
+</head>
+
+
+<body>
+<header class="masthead">
+    <div class="flex-row-between">
+        <h3 class="masthead-title">
+            <a href="/" title="Home">Ryan Hedgecock</a>
+            <small>Dev Blog</small>
+        </h3>
+        <button title="Change Theme" class="theme-toggle" onclick="toggleTheme()">
+            <i class="material-icons light-mode-icon">light_mode</i>
+            <i class="material-icons dark-mode-icon">dark_mode</i>
+        </button>
+    </div>
+</header>
+<div class="container content">
+    <main>
+        <div class="page">
+  <h1 class="page-title">404: Page not found</h1>
+  <p class="lead">Sorry, we've misplaced that URL or it's pointing to something that doesn't exist. <a href="/">Head back home</a> to try finding it again.</p>
+</div>
+
+    </main>
+    <btn id="scroll-btn" onclick="topFunction()">Back to Top ☝</btn>
+<script>
+    scrollBtn = document.getElementById("scroll-btn");
+
+    // When the user scrolls down 20px from the top of the document, show the button
+    window.onscroll = function() {scrollFunction()};
+    window.onload = function () {scrollFunction()};
+
+    function scrollFunction() {
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+            scrollBtn.style.display = "block";
+        } else {
+            scrollBtn.style.display = "none";
+        }
+    }
+
+    // When the user clicks on the button, scroll to the top of the document
+    function topFunction() {
+        document.body.scrollTop = 0; // For Safari
+        document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+    }
+</script>
+    <hr>
+    <footer class="footer">
+        <small>
+            &copy;
+            <time datetime="2023-07-07T04:48:16+00:00">2023</time>
+            Ryan Hedgecock. All rights reserved.
+        </small>
+    </footer>
+</div>
+
+</body>
+</html>

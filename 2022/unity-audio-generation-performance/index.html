@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>
+    
+      (Part 2) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds &middot; Ryan Hedgecock
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/assets/favicon.png">
+  <link rel="shortcut icon" href="/assets/favicon.png">
+
+  <!-- RSS -->
+  <link rel="alternate" type="application/atom+xml" title="Ryan Hedgecock" href="/atom.xml">
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8ET1Q8YNRG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-8ET1Q8YNRG');
+  </script>
+
+  <!-- Dark mode switcher -->
+  <script>
+    const initialTheme = localStorage.getItem('data-theme');
+    const rootDataset = document.documentElement.dataset;
+    rootDataset.theme = initialTheme === 'dark' || initialTheme === 'light' ? initialTheme : dark
+
+    function toggleTheme() {
+      const inDarkMode = (rootDataset.theme === 'dark');
+      reloadTheme(!inDarkMode);
+    }
+
+    function reloadTheme(darkMode) {
+      const mode = darkMode ? 'dark' : 'light';
+      rootDataset.theme = mode;
+      localStorage.setItem('data-theme', mode);
+
+      const utterancesFrame = document.getElementsByClassName('utterances-frame')[0];
+      if (utterancesFrame) {
+        utterancesFrame.contentWindow.postMessage({
+          type: 'set-theme',
+          theme: 'github-' + mode,
+        }, 'https://utteranc.es');
+      }
+    }
+
+    reloadTheme(rootDataset.theme === 'dark');
+  </script>
+</head>
+
+
+<body>
+<header class="masthead">
+    <div class="flex-row-between">
+        <h3 class="masthead-title">
+            <a href="/" title="Home">Ryan Hedgecock</a>
+            <small>Dev Blog</small>
+        </h3>
+        <button title="Change Theme" class="theme-toggle" onclick="toggleTheme()">
+            <i class="material-icons light-mode-icon">light_mode</i>
+            <i class="material-icons dark-mode-icon">dark_mode</i>
+        </button>
+    </div>
+</header>
+<div class="container content">
+    <main>
+        <article class="post">
+  
+  <img src="thumbnail.jpg" alt="(Part 2) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds">
+  
+  <h1 class="post-title">(Part 2) Runtime Audio Generation in the Unity Engine - Creating Simple Sounds</h1>
+  <time datetime="2022-07-04T00:00:00+00:00" class="post-date">04 Jul 2022</time>
+  <h1>Table of Contents</h1>
+
+<ul>
+  <li><a href="/2022/unity-audio-generation-fundamentals/#introduction">🔗 <strong>Introduction</strong></a></li>
+  <li><a href="/2022/unity-audio-generation-fundamentals/#fundamentals">🔗 <strong>(Part 0) Fundamentals</strong></a></li>
+  <li><a href="/2022/unity-audio-generation-simple-sounds/#creating-simple-sounds">🔗 <strong>(Part 1) Creating Simple Sounds</strong></a></li>
+  <li><a href="#performance-and-architecture">🟢 <strong>(Part 2) Performance and Architecture</strong></a>
+    <ul>
+      <li><a href="#native-buffers">Native Buffers</a>
+        <ul>
+          <li><a href="#assembly-definitions">Assembly Definitions</a></li>
+          <li><a href="#buffer-handler"><code class="language-plaintext highlighter-rouge">BufferHandler&lt;T&gt;</code></a></li>
+          <li><a href="#inativeobject--nativeboxt"><code class="language-plaintext highlighter-rouge">INativeObject</code> &amp; <code class="language-plaintext highlighter-rouge">NativeBox&lt;T&gt;</code></a></li>
+          <li><a href="#synthbuffer"><code class="language-plaintext highlighter-rouge">SynthBuffer</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#buffer-pipeline">Buffer Pipeline</a>
+        <ul>
+          <li><a href="#synthprovider"><code class="language-plaintext highlighter-rouge">SynthProvider</code></a></li>
+          <li><a href="#synthout"><code class="language-plaintext highlighter-rouge">SynthOut</code></a></li>
+          <li><a href="#sinegenerator"><code class="language-plaintext highlighter-rouge">SineGenerator</code></a></li>
+          <li><a href="#connecting-the-components">Connecting the components</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h1 id="performance-and-architecture">Performance and Architecture</h1>
+
+<p>Here is what my component looks like in the inspector while in play mode:
+<img src="latency.png" alt="Latency" /></p>
+
+<p>If you look at the <em>ms counter</em> next to the amplitude meter, you can see that this is taking approximately <strong>0.17ms</strong> to fill the buffer. This is actually pretty fast, but not fast enough. We essentially have a single oscillator making a single wave. Later on when we need <em>MANY</em> oscillators and filters all chained together, this will become completely unmanageable.</p>
+
+<p>Our current default sampling rate is <strong>48000</strong> samples per second. The buffer size for each channel is currently <strong>1024</strong>. Which means that for each iteration, we only have <strong>1024 / 48000 ≈ 0.021</strong> seconds to fill the buffer. Which means we have approximately <strong>21ms</strong> for all audio operations.</p>
+
+<p>This means that we could run… oh… <strong>123</strong> oscillators with that speed? Doesn’t sound half bad right? Well… yes, but not when we take into account the fact that our little oscillator is quite a simple calculation to make. If we wanted to make anything more complex, we are going to just eat up our precious milliseconds before we know it.</p>
+
+<p>So let’s create some tools for us to use to squeeze every drop of performance we can out of our system using the beautiful <strong>Burst Compiler</strong>. The burst compiler is able to take our fancy managed C# code, and convert it into blazing fast highly optimized native code. This <em>SIGNIFICANTLY</em> increases execution speed for certain functions, but the architecture has to be built around its drawbacks.</p>
+
+<h2 id="native-buffers">Native Buffers</h2>
+
+<p>One drawback of native code is that we can no longer pass in managed objects. Unfortunately this includes arrays like <code class="language-plaintext highlighter-rouge">float[]</code>. You also may know of a struct called <a href="https://docs.unity3d.com/ScriptReference/Unity.Collections.NativeArray_1.html"><code class="language-plaintext highlighter-rouge">NativeArray</code></a>, but this is unfortunately only able to be used in jobs and <em>not</em> burst compiled methods because it has a <a href="https://docs.unity3d.com/ScriptReference/Unity.Collections.LowLevel.Unsafe.DisposeSentinel.html"><code class="language-plaintext highlighter-rouge">DisposeSentinel</code></a> in it. So lets make our own.</p>
+
+<h3 id="assembly-definitions">Assembly Definitions</h3>
+<p>When working with native code, we will have to use the <code class="language-plaintext highlighter-rouge">unsafe</code> keyword. This is not normally allowed in our unity code without modifying the unity settings. However, we can use something called an <strong>Assembly Definition</strong> to section off a portion of our code into its own assembly. We can expressly enable unsafe code here, and keep it contained to this assembly as well.</p>
+
+<p><img src="unsafe.png" alt="Assembly Definition Settings" /></p>
+
+<p>With a native assembly set up, lets create our buffer library.</p>
+
+<h3 id="bufferhandlert"><code class="language-plaintext highlighter-rouge">BufferHandler&lt;T&gt;</code></h3>
+
+<p>We will need a first struct that allocates native memory for us. Let’s call it <code class="language-plaintext highlighter-rouge">BufferHandler</code>. This can be used in many places, so we will keep it generic for now. We will also keep it internal One downside of not having the DisposeSentinel, is that if we aren’t careful about disposing this ourselves, it can leave the data on the heap and start leaking memory. We will need to make sure to keep that in mind when working with this, and set up a structure for it to be used safely.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">[</span><span class="nf">StructLayout</span><span class="p">(</span><span class="n">LayoutKind</span><span class="p">.</span><span class="n">Sequential</span><span class="p">)]</span>
+<span class="k">internal</span> <span class="k">unsafe</span> <span class="k">struct</span> <span class="nc">BufferHandler</span><span class="p">&lt;</span><span class="n">T</span><span class="p">&gt;</span> <span class="p">:</span> <span class="n">IDisposable</span> <span class="k">where</span> <span class="n">T</span> <span class="p">:</span> <span class="n">unmanaged</span>
+<span class="p">{</span>
+    <span class="k">public</span> <span class="kt">int</span> <span class="n">Length</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="k">private</span> <span class="k">set</span><span class="p">;</span> <span class="p">}</span>
+    <span class="k">public</span> <span class="n">T</span><span class="p">*</span> <span class="n">Pointer</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="k">private</span> <span class="k">set</span><span class="p">;</span> <span class="p">}</span>
+    <span class="k">public</span> <span class="kt">bool</span> <span class="n">Allocated</span> <span class="p">=&gt;</span> <span class="p">(</span><span class="n">IntPtr</span><span class="p">)</span> <span class="n">Pointer</span> <span class="p">!=</span> <span class="n">IntPtr</span><span class="p">.</span><span class="n">Zero</span><span class="p">;</span>
+
+    <span class="k">public</span> <span class="nf">BufferHandler</span><span class="p">(</span><span class="kt">int</span> <span class="n">length</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">Length</span> <span class="p">=</span> <span class="n">length</span><span class="p">;</span>
+        <span class="n">Pointer</span> <span class="p">=</span> <span class="p">(</span><span class="n">T</span><span class="p">*)</span> <span class="n">UnsafeUtility</span><span class="p">.</span><span class="nf">Malloc</span><span class="p">(</span><span class="n">Length</span> <span class="p">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">),</span>
+            <span class="n">UnsafeUtility</span><span class="p">.</span><span class="n">AlignOf</span><span class="p">&lt;</span><span class="n">T</span><span class="p">&gt;(),</span> <span class="n">Allocator</span><span class="p">.</span><span class="n">Persistent</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="k">public</span> <span class="k">void</span> <span class="nf">Dispose</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(!</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">return</span><span class="p">;</span>
+        <span class="n">UnsafeUtility</span><span class="p">.</span><span class="nf">Free</span><span class="p">(</span><span class="n">Pointer</span><span class="p">,</span> <span class="n">Allocator</span><span class="p">.</span><span class="n">Persistent</span><span class="p">);</span>
+        <span class="n">Pointer</span> <span class="p">=</span> <span class="p">(</span><span class="n">T</span><span class="p">*)</span> <span class="n">IntPtr</span><span class="p">.</span><span class="n">Zero</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Now that we are working in the native world. We will need a way to copy that data back to the managed world efficiently at some point. So let’s add a method to our <code class="language-plaintext highlighter-rouge">BufferHandler</code> to copy data into a managed array. We will have to <strong>pin</strong> the managed array when we copy the memory so that it can’t move while we copy. It can be released immediately after.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">void</span> <span class="nf">CopyTo</span><span class="p">(</span><span class="n">T</span><span class="p">[]</span> <span class="n">managedArray</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">if</span> <span class="p">(!</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nf">ObjectDisposedException</span><span class="p">(</span><span class="s">"Cannot copy. Buffer has been disposed"</span><span class="p">);</span>
+    <span class="kt">int</span> <span class="n">length</span> <span class="p">=</span> <span class="n">Math</span><span class="p">.</span><span class="nf">Min</span><span class="p">(</span><span class="n">managedArray</span><span class="p">.</span><span class="n">Length</span><span class="p">,</span> <span class="n">Length</span><span class="p">);</span>
+    <span class="n">GCHandle</span> <span class="n">gcHandle</span> <span class="p">=</span> <span class="n">GCHandle</span><span class="p">.</span><span class="nf">Alloc</span><span class="p">(</span><span class="n">managedArray</span><span class="p">,</span> <span class="n">GCHandleType</span><span class="p">.</span><span class="n">Pinned</span><span class="p">);</span>
+    <span class="n">UnsafeUtility</span><span class="p">.</span><span class="nf">MemCpy</span><span class="p">((</span><span class="k">void</span><span class="p">*)</span> <span class="n">gcHandle</span><span class="p">.</span><span class="nf">AddrOfPinnedObject</span><span class="p">(),</span> <span class="n">Pointer</span><span class="p">,</span> <span class="n">length</span> <span class="p">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">));</span>
+    <span class="n">gcHandle</span><span class="p">.</span><span class="nf">Free</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>And while we are at it, lets create a method to copy into its fellow buffers for when we need to move data around later.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">void</span> <span class="nf">CopyTo</span><span class="p">(</span><span class="n">BufferHandler</span><span class="p">&lt;</span><span class="n">T</span><span class="p">&gt;</span> <span class="n">buffer</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">if</span> <span class="p">(!</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nf">ObjectDisposedException</span><span class="p">(</span><span class="s">"Cannot copy. Source buffer has been disposed"</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(!</span><span class="n">buffer</span><span class="p">.</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nf">ObjectDisposedException</span><span class="p">(</span><span class="s">"Cannot copy. Dest buffer has been disposed"</span><span class="p">);</span>
+    <span class="kt">int</span> <span class="n">length</span> <span class="p">=</span> <span class="n">Math</span><span class="p">.</span><span class="nf">Min</span><span class="p">(</span><span class="n">Length</span><span class="p">,</span> <span class="n">buffer</span><span class="p">.</span><span class="n">Length</span><span class="p">);</span>
+    <span class="n">UnsafeUtility</span><span class="p">.</span><span class="nf">MemCpy</span><span class="p">(</span><span class="n">Pointer</span><span class="p">,</span> <span class="n">buffer</span><span class="p">.</span><span class="n">Pointer</span><span class="p">,</span> <span class="n">length</span> <span class="p">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">));</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>We will also need to set and get items in the buffer. We can always use the pointers for this, but it could be nice to have an abstraction for it too. To do this, lets add a <a href="https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/indexers/">indexer</a>.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// use pointers to access and set the data in the buffer</span>
+<span class="k">public</span> <span class="n">T</span> <span class="k">this</span><span class="p">[</span><span class="kt">int</span> <span class="n">index</span><span class="p">]</span>
+<span class="p">{</span>
+    <span class="k">get</span>
+    <span class="p">{</span>
+        <span class="nf">CheckAndThrow</span><span class="p">(</span><span class="n">index</span><span class="p">);</span>
+        <span class="k">return</span> <span class="p">*(</span><span class="n">T</span><span class="p">*)</span> <span class="p">((</span><span class="kt">long</span><span class="p">)</span> <span class="n">Pointer</span> <span class="p">+</span> <span class="n">index</span> <span class="p">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">));</span>
+    <span class="p">}</span>
+
+    <span class="k">set</span>
+    <span class="p">{</span>
+        <span class="nf">CheckAndThrow</span><span class="p">(</span><span class="n">index</span><span class="p">);</span>
+        <span class="p">*(</span><span class="n">T</span><span class="p">*)</span> <span class="p">((</span><span class="kt">long</span><span class="p">)</span> <span class="n">Pointer</span> <span class="p">+</span> <span class="n">index</span> <span class="p">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">))</span> <span class="p">=</span> <span class="k">value</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// utility method to validate an index in the buffer</span>
+<span class="k">private</span> <span class="k">void</span> <span class="nf">CheckAndThrow</span><span class="p">(</span><span class="kt">int</span> <span class="n">index</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">if</span> <span class="p">(!</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nf">ObjectDisposedException</span><span class="p">(</span><span class="s">"Buffer is disposed"</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">index</span> <span class="p">&gt;=</span> <span class="n">Length</span> <span class="p">||</span> <span class="n">index</span> <span class="p">&lt;</span> <span class="m">0</span><span class="p">)</span>
+        <span class="k">throw</span> <span class="k">new</span> <span class="nf">IndexOutOfRangeException</span><span class="p">(</span><span class="s">$"index:</span><span class="p">{</span><span class="n">index</span><span class="p">}</span><span class="s"> out of range:0-</span><span class="p">{</span><span class="n">Length</span><span class="p">}</span><span class="s">"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="inativeobject--nativeboxt"><code class="language-plaintext highlighter-rouge">INativeObject</code> &amp; <code class="language-plaintext highlighter-rouge">NativeBox&lt;T&gt;</code></h3>
+<p>To make sure that we have a safe way to use the native buffers in this library, we will create a way of wrapping it up safely.</p>
+
+<p>First lets create an interface to represent a native object called <code class="language-plaintext highlighter-rouge">INativeObject</code>:</p>
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">interface</span> <span class="nc">INativeObject</span>
+<span class="p">{</span>
+    <span class="k">public</span> <span class="kt">bool</span> <span class="n">Allocated</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="p">}</span>
+    <span class="k">internal</span> <span class="k">void</span> <span class="nf">ReleaseResources</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>And we will also create a nice wrapper for this to be used outside the library called <code class="language-plaintext highlighter-rouge">NativeBox&lt;T&gt;</code>:</p>
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">class</span> <span class="nc">NativeBox</span><span class="p">&lt;</span><span class="n">T</span><span class="p">&gt;</span> <span class="p">:</span> <span class="n">IDisposable</span> <span class="k">where</span> <span class="n">T</span> <span class="p">:</span> <span class="n">INativeObject</span>
+<span class="p">{</span>
+    <span class="k">private</span> <span class="n">T</span> <span class="n">_data</span><span class="p">;</span>
+    <span class="k">public</span> <span class="k">ref</span> <span class="n">T</span> <span class="n">Data</span> <span class="p">=&gt;</span> <span class="k">ref</span> <span class="n">_data</span><span class="p">;</span>
+    <span class="k">public</span> <span class="kt">bool</span> <span class="n">Allocated</span> <span class="p">=&gt;</span> <span class="n">_data</span><span class="p">.</span><span class="n">Allocated</span><span class="p">;</span>
+
+    <span class="k">internal</span> <span class="nf">NativeBox</span><span class="p">(</span><span class="n">T</span> <span class="n">data</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">_data</span> <span class="p">=</span> <span class="n">data</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="p">~</span><span class="nf">NativeBox</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="nf">ReleaseUnmanagedResources</span><span class="p">();</span>
+    <span class="p">}</span>
+
+    <span class="k">private</span> <span class="k">void</span> <span class="nf">ReleaseUnmanagedResources</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(!</span><span class="n">_data</span><span class="p">.</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">return</span><span class="p">;</span>
+        <span class="n">_data</span><span class="p">.</span><span class="nf">ReleaseResources</span><span class="p">();</span>
+    <span class="p">}</span>
+
+    <span class="k">public</span> <span class="k">void</span> <span class="nf">Dispose</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="nf">ReleaseUnmanagedResources</span><span class="p">();</span>
+        <span class="n">GC</span><span class="p">.</span><span class="nf">SuppressFinalize</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="synthbuffer"><code class="language-plaintext highlighter-rouge">SynthBuffer</code></h3>
+
+<p>Let’s now create the object to contain our audio buffer data. We will call this our <code class="language-plaintext highlighter-rouge">SynthBuffer</code>. We will store data in here about the properties of the buffer, so we can keep everything we need in one spot.</p>
+
+<p>We will also expose some methods to pass through important information from the buffer itself like the CopyTo and indexers.</p>
+
+<p>The important part is that there is no constructor, but instead a <code class="language-plaintext highlighter-rouge">Construct</code> method that creates and returns a <code class="language-plaintext highlighter-rouge">NativeBox&lt;SynthBuffer&gt;</code> object. This means that no matter what our buffer is always used in a safe way.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">struct</span> <span class="nc">SynthBuffer</span> <span class="p">:</span> <span class="n">INativeObject</span>
+<span class="p">{</span> 
+    <span class="k">private</span> <span class="n">BufferHandler</span><span class="p">&lt;</span><span class="kt">float</span><span class="p">&gt;</span> <span class="n">_buffer</span><span class="p">;</span>
+    
+    <span class="k">public</span> <span class="kt">int</span> <span class="n">Channels</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="k">private</span> <span class="k">set</span><span class="p">;</span> <span class="p">}</span>
+    <span class="k">public</span> <span class="kt">int</span> <span class="n">ChannelLength</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="k">private</span> <span class="k">set</span><span class="p">;</span> <span class="p">}</span>
+    <span class="k">public</span> <span class="kt">int</span> <span class="n">Length</span> <span class="p">=&gt;</span> <span class="n">_buffer</span><span class="p">.</span><span class="n">Length</span><span class="p">;</span>
+    <span class="k">public</span> <span class="kt">bool</span> <span class="n">Allocated</span> <span class="p">=&gt;</span> <span class="n">_buffer</span><span class="p">.</span><span class="n">Allocated</span><span class="p">;</span>
+
+    <span class="k">public</span> <span class="k">static</span> <span class="n">NativeBox</span><span class="p">&lt;</span><span class="n">SynthBuffer</span><span class="p">&gt;</span> <span class="nf">Construct</span><span class="p">(</span><span class="kt">int</span> <span class="n">bufferLength</span><span class="p">,</span> <span class="kt">int</span> <span class="n">channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">SynthBuffer</span> <span class="n">buffer</span> <span class="p">=</span> <span class="k">new</span> <span class="n">SynthBuffer</span>
+        <span class="p">{</span>
+            <span class="n">Channels</span> <span class="p">=</span> <span class="n">channels</span><span class="p">,</span>
+            <span class="n">ChannelLength</span> <span class="p">=</span> <span class="n">bufferLength</span> <span class="p">/</span> <span class="n">channels</span><span class="p">,</span>
+            <span class="n">_buffer</span> <span class="p">=</span> <span class="k">new</span> <span class="n">BufferHandler</span><span class="p">&lt;</span><span class="kt">float</span><span class="p">&gt;(</span><span class="n">bufferLength</span><span class="p">)</span>
+        <span class="p">};</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="n">NativeBox</span><span class="p">&lt;</span><span class="n">SynthBuffer</span><span class="p">&gt;(</span><span class="n">buffer</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="k">public</span> <span class="kt">float</span> <span class="k">this</span><span class="p">[</span><span class="kt">int</span> <span class="n">index</span><span class="p">]</span>
+    <span class="p">{</span>
+        <span class="k">get</span> <span class="p">=&gt;</span> <span class="n">_buffer</span><span class="p">[</span><span class="n">index</span><span class="p">];</span>
+        <span class="k">set</span> <span class="p">=&gt;</span> <span class="n">_buffer</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="p">=</span> <span class="k">value</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">public</span> <span class="k">void</span> <span class="nf">CopyTo</span><span class="p">(</span><span class="kt">float</span><span class="p">[]</span> <span class="n">managedArray</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="n">_buffer</span><span class="p">.</span><span class="nf">CopyTo</span><span class="p">(</span><span class="n">managedArray</span><span class="p">);</span>
+    <span class="k">public</span> <span class="k">void</span> <span class="nf">CopyTo</span><span class="p">(</span><span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="n">_buffer</span><span class="p">.</span><span class="nf">CopyTo</span><span class="p">(</span><span class="n">buffer</span><span class="p">.</span><span class="n">_buffer</span><span class="p">);</span>
+
+
+    <span class="k">void</span> <span class="n">INativeObject</span><span class="p">.</span><span class="nf">ReleaseResources</span><span class="p">()</span> <span class="p">=&gt;</span> <span class="n">_buffer</span><span class="p">.</span><span class="nf">Dispose</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="buffer-pipeline">Buffer Pipeline</h2>
+
+<p>With our native tools in our tool belt now, we can start to establish an architecture for our audio pipeline. Let’s start with a base abstract class that will be in charge of providing our buffers with audio data. Lets will call it <code class="language-plaintext highlighter-rouge">SynthProvider</code>.</p>
+
+<h3 id="synthprovider"><code class="language-plaintext highlighter-rouge">SynthProvider</code></h3>
+
+<p>This will be in charge of filling our buffers and keeping a local cache of the last buffer filled. We won’t really need to utilize caching now, but it is useful for transferring our data back into a managed buffer.</p>
+
+<p>We will have two <code class="language-plaintext highlighter-rouge">FillBuffer</code> methods for managed and native buffers, and they will call an abstract method <code class="language-plaintext highlighter-rouge">ProcessBuffer</code> that will be defined by classes that extend this provider.</p>
+
+<p>There will also be a private utility method <code class="language-plaintext highlighter-rouge">EnsureBufferAllocated</code> that will be used to make sure the cached buffer is the same as the incoming buffer.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">abstract</span> <span class="k">class</span> <span class="nc">SynthProvider</span> <span class="p">:</span> <span class="n">MonoBehaviour</span>
+<span class="p">{</span>
+    <span class="k">private</span> <span class="n">NativeBox</span><span class="p">&lt;</span><span class="n">SynthBuffer</span><span class="p">&gt;</span> <span class="n">_buffer</span><span class="p">;</span>
+
+    <span class="k">public</span> <span class="k">void</span> <span class="nf">FillBuffer</span><span class="p">(</span><span class="kt">float</span><span class="p">[]</span> <span class="n">buffer</span><span class="p">,</span> <span class="kt">int</span> <span class="n">channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="nf">ValidateBuffer</span><span class="p">(</span><span class="n">buffer</span><span class="p">.</span><span class="n">Length</span><span class="p">,</span> <span class="n">channels</span><span class="p">);</span>
+        <span class="nf">ProcessBuffer</span><span class="p">(</span><span class="k">ref</span> <span class="n">_buffer</span><span class="p">.</span><span class="n">Data</span><span class="p">);</span>
+        <span class="n">_buffer</span><span class="p">.</span><span class="n">Data</span><span class="p">.</span><span class="nf">CopyTo</span><span class="p">(</span><span class="n">buffer</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// processes and fills a native buffer with sound data</span>
+    <span class="k">public</span> <span class="k">void</span> <span class="nf">FillBuffer</span><span class="p">(</span><span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(!</span><span class="n">buffer</span><span class="p">.</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">return</span><span class="p">;</span>
+        <span class="nf">ValidateBuffer</span><span class="p">(</span><span class="n">buffer</span><span class="p">.</span><span class="n">Length</span><span class="p">,</span> <span class="n">buffer</span><span class="p">.</span><span class="n">Channels</span><span class="p">);</span>
+        <span class="nf">ProcessBuffer</span><span class="p">(</span><span class="k">ref</span> <span class="n">_buffer</span><span class="p">.</span><span class="n">Data</span><span class="p">);</span>
+        <span class="n">_buffer</span><span class="p">.</span><span class="n">Data</span><span class="p">.</span><span class="nf">CopyTo</span><span class="p">(</span><span class="k">ref</span> <span class="n">buffer</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="k">private</span> <span class="k">void</span> <span class="nf">ValidateBuffer</span><span class="p">(</span><span class="kt">int</span> <span class="n">bufferLength</span><span class="p">,</span> <span class="kt">int</span> <span class="n">channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(!(</span><span class="n">_buffer</span> <span class="k">is</span> <span class="p">{</span><span class="n">Allocated</span><span class="p">:</span> <span class="k">true</span><span class="p">}))</span> 
+            <span class="n">_buffer</span> <span class="p">=</span> <span class="n">SynthBuffer</span><span class="p">.</span><span class="nf">Construct</span><span class="p">(</span><span class="n">bufferLength</span><span class="p">,</span> <span class="n">channels</span><span class="p">);</span>
+
+        <span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span> <span class="p">=</span> <span class="k">ref</span> <span class="n">_buffer</span><span class="p">.</span><span class="n">Data</span><span class="p">;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">buffer</span><span class="p">.</span><span class="n">Length</span> <span class="p">==</span> <span class="n">bufferLength</span> <span class="p">&amp;&amp;</span> <span class="n">buffer</span><span class="p">.</span><span class="n">Channels</span> <span class="p">==</span> <span class="n">channels</span><span class="p">)</span> <span class="k">return</span><span class="p">;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">buffer</span><span class="p">.</span><span class="n">Allocated</span><span class="p">)</span> <span class="n">_buffer</span><span class="p">.</span><span class="nf">Dispose</span><span class="p">();</span>
+        <span class="n">_buffer</span> <span class="p">=</span> <span class="n">SynthBuffer</span><span class="p">.</span><span class="nf">Construct</span><span class="p">(</span><span class="n">bufferLength</span><span class="p">,</span> <span class="n">channels</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// override for creating custom providers</span>
+    <span class="k">protected</span> <span class="k">abstract</span> <span class="k">void</span> <span class="nf">ProcessBuffer</span><span class="p">(</span><span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="synthout"><code class="language-plaintext highlighter-rouge">SynthOut</code></h3>
+
+<p>Armed with a generic class for filling buffers, we can decide how we want to plug it into the audio system. Let’s create a new class called <code class="language-plaintext highlighter-rouge">SynthOut</code> to be our link to the Unity audio engine.</p>
+
+<p>For now, it will just take the unity buffer and fill it using an exposed <code class="language-plaintext highlighter-rouge">SynthProvider</code>. But later we will be able to expand this to cover other needs we may have.</p>
+
+<p>Here is all we need for now:</p>
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">class</span> <span class="nc">SynthOut</span> <span class="p">:</span> <span class="n">MonoBehaviour</span>
+<span class="p">{</span>
+    <span class="p">[</span><span class="n">SerializeField</span><span class="p">]</span> <span class="k">private</span> <span class="n">SynthProvider</span> <span class="n">provider</span><span class="p">;</span>
+    
+    <span class="k">private</span> <span class="k">void</span> <span class="nf">OnAudioFilterRead</span><span class="p">(</span><span class="kt">float</span><span class="p">[]</span> <span class="n">data</span><span class="p">,</span> <span class="kt">int</span> <span class="n">channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">provider</span><span class="p">.</span><span class="nf">FillBuffer</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">channels</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="sinegenerator"><code class="language-plaintext highlighter-rouge">SineGenerator</code></h3>
+
+<p>Alright lets get back to our roots. We have a simple architecture, and a way to start creating new generators with native buffers. Let’s create another sine generator, but this time use that fancy <strong>Burst Compiler</strong> we keep talking about.</p>
+
+<p>We will do this one in steps here, so let’s just start with the class creation and pulling in our trusty inspector parameters and private members. We will also need to tag the class with the attribute <code class="language-plaintext highlighter-rouge">[BurstCompile]</code> so that we may use burst methods in the class.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">[</span><span class="n">BurstCompile</span><span class="p">]</span>
+<span class="k">public</span> <span class="k">class</span> <span class="nc">SineGenerator</span> <span class="p">:</span> <span class="n">SynthProvider</span>
+<span class="p">{</span>
+    <span class="p">[</span><span class="n">SerializeField</span><span class="p">,</span> <span class="nf">Range</span><span class="p">(</span><span class="m">0</span><span class="p">,</span> <span class="m">1</span><span class="p">)]</span> <span class="k">private</span> <span class="kt">float</span> <span class="n">amplitude</span> <span class="p">=</span> <span class="m">0.5f</span><span class="p">;</span>
+    <span class="p">[</span><span class="n">SerializeField</span><span class="p">,</span> <span class="nf">Range</span><span class="p">(</span><span class="m">16.35f</span><span class="p">,</span> <span class="m">7902.13f</span><span class="p">)]</span> <span class="k">private</span> <span class="kt">float</span> <span class="n">frequency</span> <span class="p">=</span> <span class="m">261.62f</span><span class="p">;</span> <span class="c1">// middle C</span>
+    
+    <span class="k">private</span> <span class="kt">double</span> <span class="n">_phase</span><span class="p">;</span>
+    <span class="k">private</span> <span class="kt">int</span> <span class="n">_sampleRate</span><span class="p">;</span>
+    
+    <span class="k">private</span> <span class="k">void</span> <span class="nf">Awake</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="n">_sampleRate</span> <span class="p">=</span> <span class="n">AudioSettings</span><span class="p">.</span><span class="nf">GetConfiguration</span><span class="p">().</span><span class="n">sampleRate</span><span class="p">;</span>
+    <span class="p">}</span>
+    
+    <span class="k">protected</span> <span class="k">override</span> <span class="k">void</span> <span class="nf">ProcessBuffer</span><span class="p">(</span><span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="c1">// TODO: fill the buffer with sine data</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Now we need to define a static method to be burst compiled called <code class="language-plaintext highlighter-rouge">BurstSine</code>. <em>(all burst compiled methods have to be static)</em> We will also tag it with the attribute <code class="language-plaintext highlighter-rouge">[BurstCompile]</code>. We will also have it return a double to represent current phase of the wave, as we cannot change instance variables from within a static method.</p>
+
+<p>Referencing our previous <code class="language-plaintext highlighter-rouge">SimpleSineGenerator</code>, we can write this pretty easily by converting our managed array logic to our new native buffer logic.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">[</span><span class="n">BurstCompile</span><span class="p">]</span>
+<span class="k">private</span> <span class="k">static</span> <span class="kt">double</span> <span class="nf">BurstSine</span><span class="p">(</span><span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span><span class="p">,</span>
+    <span class="kt">double</span> <span class="n">phase</span><span class="p">,</span> <span class="kt">int</span> <span class="n">sampleRate</span><span class="p">,</span> <span class="kt">float</span> <span class="n">amplitude</span><span class="p">,</span> <span class="kt">float</span> <span class="n">frequency</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="c1">// calculate how much the phase should change after each sample</span>
+    <span class="kt">double</span> <span class="n">phaseIncrement</span> <span class="p">=</span> <span class="n">frequency</span> <span class="p">/</span> <span class="n">sampleRate</span><span class="p">;</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">sample</span> <span class="p">=</span> <span class="m">0</span><span class="p">;</span> <span class="n">sample</span> <span class="p">&lt;</span> <span class="n">buffer</span><span class="p">.</span><span class="n">Length</span><span class="p">;</span> <span class="n">sample</span> <span class="p">+=</span> <span class="n">buffer</span><span class="p">.</span><span class="n">Channels</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="c1">// get value of phase on a sine wave</span>
+        <span class="kt">float</span> <span class="k">value</span> <span class="p">=</span> <span class="n">math</span><span class="p">.</span><span class="nf">sin</span><span class="p">(</span><span class="n">phase</span> <span class="p">*</span> <span class="m">2</span> <span class="p">*</span> <span class="n">math</span><span class="p">.</span><span class="n">PI</span><span class="p">)</span> <span class="p">*</span> <span class="n">amplitude</span><span class="p">;</span>
+        
+        <span class="c1">// increment _phase value for next iteration</span>
+        <span class="n">phase</span> <span class="p">=</span> <span class="p">(</span><span class="n">phase</span> <span class="p">+</span> <span class="n">phaseIncrement</span><span class="p">)</span> <span class="p">%</span> <span class="m">1</span><span class="p">;</span>
+    
+        <span class="c1">// populate all channels with the values</span>
+        <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">channel</span> <span class="p">=</span> <span class="m">0</span><span class="p">;</span> <span class="n">channel</span> <span class="p">&lt;</span> <span class="n">buffer</span><span class="p">.</span><span class="n">Channels</span><span class="p">;</span> <span class="n">channel</span><span class="p">++)</span>
+        <span class="p">{</span>
+            <span class="n">buffer</span><span class="p">[</span><span class="n">sample</span> <span class="p">+</span> <span class="n">channel</span><span class="p">]</span> <span class="p">=</span> <span class="k">value</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// return the updated phase</span>
+    <span class="k">return</span> <span class="n">phase</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Now all that’s left is to link it up. Unfortunately we can’t just call the method, we need to burst compile it first using <code class="language-plaintext highlighter-rouge">BurstCompiler.CompileFunctionPointer</code>.</p>
+
+<p>Add the following to the class:</p>
+
+<ol>
+  <li>a delegate method definition for our burst method
+    <div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">private</span> <span class="k">delegate</span> <span class="kt">long</span> <span class="nf">BurstSineDelegate</span><span class="p">(</span><span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span><span class="p">,</span>
+     <span class="kt">double</span> <span class="n">phase</span><span class="p">,</span> <span class="kt">int</span> <span class="n">sampleRate</span><span class="p">,</span> <span class="kt">float</span> <span class="n">amplitude</span><span class="p">,</span> <span class="kt">float</span> <span class="n">frequency</span><span class="p">);</span>
+</code></pre></div>    </div>
+  </li>
+  <li>a static delegate method member for holding the burst compiled method
+    <div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">private</span> <span class="k">static</span> <span class="n">BurstSineDelegate</span> <span class="n">_burstSine</span><span class="p">;</span>
+</code></pre></div>    </div>
+  </li>
+  <li>in the Awake method, check if <code class="language-plaintext highlighter-rouge">_burstSine</code> is created. If not compile the function and get the reference to the compiled delegate using <code class="language-plaintext highlighter-rouge">Invoke</code>.
+    <div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">private</span> <span class="k">void</span> <span class="nf">Awake</span><span class="p">()</span>
+<span class="p">{</span>
+ <span class="n">_sampleRate</span> <span class="p">=</span> <span class="n">AudioSettings</span><span class="p">.</span><span class="nf">GetConfiguration</span><span class="p">().</span><span class="n">sampleRate</span><span class="p">;</span>
+ <span class="k">if</span> <span class="p">(</span><span class="n">_burstSine</span> <span class="p">!=</span> <span class="k">null</span><span class="p">)</span> <span class="k">return</span><span class="p">;</span>
+ <span class="n">_burstSine</span> <span class="p">=</span> <span class="n">BurstCompiler</span><span class="p">.</span><span class="n">CompileFunctionPointer</span><span class="p">&lt;</span><span class="n">BurstSineDelegate</span><span class="p">&gt;(</span><span class="n">BurstSine</span><span class="p">).</span><span class="n">Invoke</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li>Finally, in <code class="language-plaintext highlighter-rouge">ProcessBuffer</code> use the burst compiled <code class="language-plaintext highlighter-rouge">_burstSine</code> delegate reference to fill the buffer with sine values.
+    <div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">protected</span> <span class="k">override</span> <span class="k">void</span> <span class="nf">ProcessBuffer</span><span class="p">(</span><span class="k">ref</span> <span class="n">SynthBuffer</span> <span class="n">buffer</span><span class="p">)</span>
+<span class="p">{</span>
+ <span class="n">_phase</span> <span class="p">=</span> <span class="nf">_burstSine</span><span class="p">(</span><span class="k">ref</span> <span class="n">buffer</span><span class="p">,</span> <span class="n">_phase</span><span class="p">,</span> <span class="n">_sampleRate</span><span class="p">,</span> <span class="n">amplitude</span><span class="p">,</span> <span class="n">frequency</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="connecting-the-components">Connecting the components</h3>
+
+<p>With an architecture and a simple class created, let’s replace our <code class="language-plaintext highlighter-rouge">SimpleSineGenerator</code> with a <code class="language-plaintext highlighter-rouge">SynthOut</code> object.</p>
+
+<p>Next, create a new <em>GameObject</em> and add the component <code class="language-plaintext highlighter-rouge">SineGenerator</code>. Then plug the game object into the <code class="language-plaintext highlighter-rouge">provider</code> slot in the <code class="language-plaintext highlighter-rouge">SynthOut</code> component.</p>
+
+<p>Hit play, and see the burst compiler at work!
+<img src="new-latency.png" alt="New Latency" /></p>
+
+<p>Without changing any logic or optimizing for the burst compiler, we have already <em>more than DOUBLED</em> the performance of the previous method! And we have a good architecture to build on too!</p>
+
+</article>
+
+<hr>
+<div id="github-thread"></div>
+<script>
+(() => {
+    let utterances = document.createElement('script');
+    utterances.setAttribute('src', 'https://utteranc.es/client.js');
+    utterances.setAttribute('repo', 'rhedgeco/rhedgeco-blog');
+    utterances.setAttribute('issue-term', 'title');
+    utterances.setAttribute('label', 'blog chat 💬');
+    utterances.setAttribute('crossorigin', 'anonymous');
+    utterances.setAttribute('async', '');
+
+    let utterancesTheme = document.documentElement.dataset.theme === 'dark' ? 'github-dark' : 'github-light';
+    utterances.setAttribute('theme', utterancesTheme);
+
+    document.getElementById('github-thread').replaceWith(utterances);
+})();
+</script>
+<noscript>Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.</noscript>
+
+    </main>
+    <btn id="scroll-btn" onclick="topFunction()">Back to Top ☝</btn>
+<script>
+    scrollBtn = document.getElementById("scroll-btn");
+
+    // When the user scrolls down 20px from the top of the document, show the button
+    window.onscroll = function() {scrollFunction()};
+    window.onload = function () {scrollFunction()};
+
+    function scrollFunction() {
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+            scrollBtn.style.display = "block";
+        } else {
+            scrollBtn.style.display = "none";
+        }
+    }
+
+    // When the user clicks on the button, scroll to the top of the document
+    function topFunction() {
+        document.body.scrollTop = 0; // For Safari
+        document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+    }
+</script>
+    <hr>
+    <footer class="footer">
+        <small>
+            &copy;
+            <time datetime="2023-07-07T04:48:16+00:00">2023</time>
+            Ryan Hedgecock. All rights reserved.
+        </small>
+    </footer>
+</div>
+
+</body>
+</html>

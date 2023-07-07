@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>
+    
+      How to stay SAFE with UNSAFE code in C# &middot; Ryan Hedgecock
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/assets/favicon.png">
+  <link rel="shortcut icon" href="/assets/favicon.png">
+
+  <!-- RSS -->
+  <link rel="alternate" type="application/atom+xml" title="Ryan Hedgecock" href="/atom.xml">
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8ET1Q8YNRG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-8ET1Q8YNRG');
+  </script>
+
+  <!-- Dark mode switcher -->
+  <script>
+    const initialTheme = localStorage.getItem('data-theme');
+    const rootDataset = document.documentElement.dataset;
+    rootDataset.theme = initialTheme === 'dark' || initialTheme === 'light' ? initialTheme : dark
+
+    function toggleTheme() {
+      const inDarkMode = (rootDataset.theme === 'dark');
+      reloadTheme(!inDarkMode);
+    }
+
+    function reloadTheme(darkMode) {
+      const mode = darkMode ? 'dark' : 'light';
+      rootDataset.theme = mode;
+      localStorage.setItem('data-theme', mode);
+
+      const utterancesFrame = document.getElementsByClassName('utterances-frame')[0];
+      if (utterancesFrame) {
+        utterancesFrame.contentWindow.postMessage({
+          type: 'set-theme',
+          theme: 'github-' + mode,
+        }, 'https://utteranc.es');
+      }
+    }
+
+    reloadTheme(rootDataset.theme === 'dark');
+  </script>
+</head>
+
+
+<body>
+<header class="masthead">
+    <div class="flex-row-between">
+        <h3 class="masthead-title">
+            <a href="/" title="Home">Ryan Hedgecock</a>
+            <small>Dev Blog</small>
+        </h3>
+        <button title="Change Theme" class="theme-toggle" onclick="toggleTheme()">
+            <i class="material-icons light-mode-icon">light_mode</i>
+            <i class="material-icons dark-mode-icon">dark_mode</i>
+        </button>
+    </div>
+</header>
+<div class="container content">
+    <main>
+        <article class="post">
+  
+  <img src="thumbnail.jpg" alt="How to stay SAFE with UNSAFE code in C#">
+  
+  <h1 class="post-title">How to stay SAFE with UNSAFE code in C#</h1>
+  <time datetime="2022-08-07T00:00:00+00:00" class="post-date">07 Aug 2022</time>
+  <p>When making games in the Unity Engine, you almost never have to touch <code class="language-plaintext highlighter-rouge">unsafe</code> code. Some of you may have never even heard of it. In fact, good number of you could go your whole life without ever needing to touch <code class="language-plaintext highlighter-rouge">unsafe</code> code.</p>
+
+<p>But if/when you <em>do</em> have to use <code class="language-plaintext highlighter-rouge">unsafe</code> code, it can be pretty scary. I mean, it must be called ⚠️<strong><em>UNSAFE</em></strong>⚠️ for a reason right?</p>
+
+<p>Well, in some sense, you <em>should</em> be a little scared. But it should definitely not be because you don’t know what could happen. I want to demystify unsafe code. I will go over what it is and why it is called <code class="language-plaintext highlighter-rouge">unsafe</code>, how Unity has handled it in their own codebase, and other ways to handle it on your own if you need to.</p>
+
+<h2 id="what-is-unsafe-code">What is <code class="language-plaintext highlighter-rouge">unsafe</code> code?</h2>
+
+<p><code class="language-plaintext highlighter-rouge">unsafe</code> code, is code that requires you to surround it with an <code class="language-plaintext highlighter-rouge">unsafe</code> block. That looks a little like this:</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">float</span> <span class="k">value</span> <span class="p">=</span> <span class="m">5</span><span class="p">;</span>
+
+<span class="k">unsafe</span> <span class="p">{</span>
+    <span class="kt">float</span><span class="p">*</span> <span class="n">valuePointer</span> <span class="p">=</span> <span class="p">&amp;</span><span class="k">value</span><span class="p">;</span> <span class="c1">// pointers are UNSAFE!</span>
+    <span class="nf">doSomethingWith</span><span class="p">(</span><span class="n">valuePointer</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>You can see in the example we used something called a <strong>pointer</strong>. In fact, the only reason that the <code class="language-plaintext highlighter-rouge">unsafe</code> block exists is because of pointers.</p>
+
+<h3 id="so-what-is-a-pointer">So what is a pointer?</h3>
+
+<p>A pointer is a value that points to the spot in memory where a variable’s data lives.</p>
+
+<p>So in the example above, we have a floating point variable called <code class="language-plaintext highlighter-rouge">value</code>. The number exists somewhere in your computers RAM. We then take the pointer to the variable using <code class="language-plaintext highlighter-rouge">float* valuePointer = &amp;value;</code>. The <code class="language-plaintext highlighter-rouge">&amp;</code> symbol here is what extracts the pointer from the variable. The <code class="language-plaintext highlighter-rouge">floatPointer</code> can now be thought of as containing the home address of the value;</p>
+
+<p><img src="pointer-example.jpg" alt="Pointer Example" /></p>
+
+<p>Now everything is all fine and dandy, and this pointer may be used to get the data from that address any time. However, something dangerous is afoot. Let’s say <code class="language-plaintext highlighter-rouge">value</code> moves homes. Or (<em>bless their soul</em>🙏) <code class="language-plaintext highlighter-rouge">value</code> gets taken to a better place by the garbage collector and the house is destroyed. Well the pointer still points to the same address, but who knows what could be residing there now. <em>IT MAY NOT EVEN BE A FLOAT ANYMORE!</em></p>
+
+<p>So now, if you were to read the data at that address, it would be anyone’s guess what you get back. Or <strong><em>EVEN WORSE</em></strong> if you write data to that address, you could be completely corrupting the data for some unrelated object now sitting in that spot in memory.</p>
+
+<p>This can cause what is called <strong>undefined behaviour</strong> in the programming world. It has been the bane of many programmers for a long time, and will usually end up crashing the program. So when <strong>C#</strong> came around they decided to protect these pointers behind the <code class="language-plaintext highlighter-rouge">unsafe</code> wall, so that you can only use them if you <em>KNOW</em> what you are doing.</p>
+
+<p>Let’s take a look at how Unity uses <code class="language-plaintext highlighter-rouge">unsafe</code> code in their codebase.</p>
+
+<h2 id="where-and-why-does-unity-use-unsafe-code">Where and why does Unity use <code class="language-plaintext highlighter-rouge">unsafe</code> code?</h2>
+
+<p>With the introduction of the <a href="https://docs.unity3d.com/Manual/JobSystem.html">Unity Job System</a> and <a href="https://docs.unity3d.com/Packages/com.unity.burst@0.2/manual/index.html">Burst Compiler</a> unity has started to use a lot more <code class="language-plaintext highlighter-rouge">unsafe</code> code in their codebase. Since these workflows deal so much with native code, all memory needs to be allocated in a special way and requires passing around pointers from managed memory to the native compiled code.</p>
+
+<p>We will take a look at the <code class="language-plaintext highlighter-rouge">NativeArray&lt;T&gt;</code> class as an example.</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// sections have been removed for brevity</span>
+<span class="k">public</span> <span class="k">struct</span> <span class="nc">NativeArray</span><span class="p">&lt;</span><span class="n">T</span><span class="p">&gt;</span> <span class="p">:</span> <span class="n">IDisposable</span> <span class="k">where</span> <span class="n">T</span> <span class="p">:</span> <span class="k">struct</span>
+<span class="err">{</span>
+    <span class="err">...</span>
+    
+    <span class="nc">internal</span> <span class="k">unsafe</span> <span class="k">void</span><span class="p">*</span> <span class="n">m_Buffer</span><span class="p">;</span>
+    
+    <span class="p">...</span>
+    
+    <span class="k">internal</span> <span class="n">DisposeSentinel</span> <span class="n">m_DisposeSentinel</span><span class="p">;</span>
+    
+    <span class="p">...</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>You will notice a few things here. There is a <code class="language-plaintext highlighter-rouge">void*</code> called a void pointer. This represents a pointer to what could be anything. But the other thing here is actually a managed object called <code class="language-plaintext highlighter-rouge">DisposeSentinel</code>. This is a safety mechanism that unity has added to make sure memory gets cleaned up.</p>
+
+<p>A problem that can happen when we are allocating memory outside our managed space, is the fact that the garbage collector has no idea that it exists. Which means that <em>WE</em> have to be sure to clean it up manually. Unity has a slight remedy for this by using a <code class="language-plaintext highlighter-rouge">DisposeSentinel</code>.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">DisposeSentinel</code> is a managed object that exists within the scope of the garbage collector. So that means that when the garbage collector comes around to clean it up it will call something in the object called a <strong>Destructor</strong>. That looks a little like this:</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">sealed</span> <span class="k">class</span> <span class="nc">DisposeSentinel</span>
+<span class="p">{</span>
+    <span class="p">~</span><span class="nf">DisposeSentinel</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="c1">// do something</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>A destructor is called when the garbage collector cleans up the memory for an object. This destructor is utilized by unity to watch over and clean up the memory that it is in charge of, in case it is never disposed. It will also throw a warning that looks something like this, <code class="language-plaintext highlighter-rouge">A Native Collection has not been disposed, resulting in a memory leak.</code> It will give these warnings because having a managed object in the struct along with other safety checks can effect performance, and in builds will often be disabled. So unity encourages the developer to find and clean up these leaks themselves before release.</p>
+
+<h1 id="how-can-we-handle-unsafe-code-on-our-own">How can we handle <code class="language-plaintext highlighter-rouge">unsafe</code> code on our own?</h1>
+
+<p>Sometimes you will have to write your own native objects and use <code class="language-plaintext highlighter-rouge">unsafe</code> code on your own without the help of unity’s nice wrappers. I have had to do this in <a href="../unity-audio-generation-performance/">previous blog posts</a>.</p>
+
+<p>The big thing you always have to think about, is making sure you create an architecture that cannot be used incorrectly. And if you must leave around <code class="language-plaintext highlighter-rouge">unsafe</code> code unprotected, you should make sure to keep it heavily tested.</p>
+
+<p>In my last post, I chose to go the route of completely protecting my <code class="language-plaintext highlighter-rouge">unsafe</code> code behind an <a href="https://docs.unity3d.com/Manual/ScriptCompilationAssemblyDefinitionFiles.html">Assembly Definition</a>. And within that seperate assembly, I only exposed native objects in a manner that (I think) is completely safe. This is done in a similar way to unity’s method, except instead of having a <code class="language-plaintext highlighter-rouge">DisposeSentinel</code> inside the structs, I opted to wrap all native objects within a managed object called <code class="language-plaintext highlighter-rouge">NativeBox&lt;T&gt;</code>.</p>
+
+<p><code class="language-plaintext highlighter-rouge">NativeBox&lt;T&gt;</code> is not an object you will find online, it is a custom object I have created to managed native objects. It looks a little like this:</p>
+
+<p>I have added comments to explain what is going on</p>
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">public</span> <span class="k">class</span> <span class="nc">NativeBox</span><span class="p">&lt;</span><span class="n">T</span><span class="p">&gt;</span> <span class="p">:</span> <span class="n">IDisposable</span> <span class="k">where</span> <span class="n">T</span> <span class="p">:</span> <span class="n">INativeObject</span>
+<span class="p">{</span>
+    <span class="c1">// I keep the native struct stored in a member of this class</span>
+    <span class="k">private</span> <span class="n">T</span> <span class="n">_data</span><span class="p">;</span>
+    <span class="k">public</span> <span class="k">ref</span> <span class="n">T</span> <span class="n">Data</span> <span class="p">=&gt;</span> <span class="k">ref</span> <span class="n">_data</span><span class="p">;</span>
+    
+    <span class="c1">// and I have a check to make sure the object is not disposed already</span>
+    <span class="k">public</span> <span class="kt">bool</span> <span class="n">Allocated</span> <span class="p">=&gt;</span> <span class="n">_data</span><span class="p">.</span><span class="n">Allocated</span><span class="p">;</span>
+
+    <span class="c1">// the native box constructor is kept internal, as we do not need</span>
+    <span class="c1">// to be creatingthese outside the assembly</span>
+    <span class="k">internal</span> <span class="nf">NativeBox</span><span class="p">(</span><span class="n">T</span> <span class="n">data</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">_data</span> <span class="p">=</span> <span class="n">data</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">// just like the unity example, we use a destructor</span>
+    <span class="p">~</span><span class="nf">NativeBox</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="nf">ReleaseUnmanagedResources</span><span class="p">();</span>
+    <span class="p">}</span>
+
+    <span class="c1">// the destructor will call this to release the native object</span>
+    <span class="k">private</span> <span class="k">void</span> <span class="nf">ReleaseUnmanagedResources</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(!</span><span class="n">_data</span><span class="p">.</span><span class="n">Allocated</span><span class="p">)</span> <span class="k">return</span><span class="p">;</span>
+        <span class="n">_data</span><span class="p">.</span><span class="nf">ReleaseResources</span><span class="p">();</span>
+    <span class="p">}</span>
+
+    <span class="c1">// in the event that this object is disposed manually,</span>
+    <span class="c1">// supress the destructor so that it doesnt try to dispose twice</span>
+    <span class="k">public</span> <span class="k">void</span> <span class="nf">Dispose</span><span class="p">()</span>
+    <span class="p">{</span>
+        <span class="nf">ReleaseUnmanagedResources</span><span class="p">();</span>
+        <span class="n">GC</span><span class="p">.</span><span class="nf">SuppressFinalize</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Now this only covers the problem of leaving behind memory, and not the problem of dangling pointers to old memory positions. But the idea is the same. Try your best to keep the pointer logic to small discreet objects, so that you don’t lose track of what things can go wrong.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>All in all, I have covered what <code class="language-plaintext highlighter-rouge">unsafe</code> code is and why it is dangerous. I have also showed a few ways that unsafe code has been handled by unity and by me. I hope that, armed with this newfound knowledge, you can be more confident in your adventures in the world of <code class="language-plaintext highlighter-rouge">unsafe</code> code. Have fun!</p>
+
+</article>
+
+<hr>
+<div id="github-thread"></div>
+<script>
+(() => {
+    let utterances = document.createElement('script');
+    utterances.setAttribute('src', 'https://utteranc.es/client.js');
+    utterances.setAttribute('repo', 'rhedgeco/rhedgeco-blog');
+    utterances.setAttribute('issue-term', 'title');
+    utterances.setAttribute('label', 'blog chat 💬');
+    utterances.setAttribute('crossorigin', 'anonymous');
+    utterances.setAttribute('async', '');
+
+    let utterancesTheme = document.documentElement.dataset.theme === 'dark' ? 'github-dark' : 'github-light';
+    utterances.setAttribute('theme', utterancesTheme);
+
+    document.getElementById('github-thread').replaceWith(utterances);
+})();
+</script>
+<noscript>Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.</noscript>
+
+    </main>
+    <btn id="scroll-btn" onclick="topFunction()">Back to Top ☝</btn>
+<script>
+    scrollBtn = document.getElementById("scroll-btn");
+
+    // When the user scrolls down 20px from the top of the document, show the button
+    window.onscroll = function() {scrollFunction()};
+    window.onload = function () {scrollFunction()};
+
+    function scrollFunction() {
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+            scrollBtn.style.display = "block";
+        } else {
+            scrollBtn.style.display = "none";
+        }
+    }
+
+    // When the user clicks on the button, scroll to the top of the document
+    function topFunction() {
+        document.body.scrollTop = 0; // For Safari
+        document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+    }
+</script>
+    <hr>
+    <footer class="footer">
+        <small>
+            &copy;
+            <time datetime="2023-07-07T04:48:16+00:00">2023</time>
+            Ryan Hedgecock. All rights reserved.
+        </small>
+    </footer>
+</div>
+
+</body>
+</html>
